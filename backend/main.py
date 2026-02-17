@@ -7,7 +7,7 @@ import httpx
 import csv
 import io
 import os
-from database import get_db, init_db, dict_from_row
+from .database import get_db, init_db, dict_from_row
 from dotenv import load_dotenv
 
 load_dotenv()
