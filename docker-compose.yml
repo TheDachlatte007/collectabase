@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  collectabase:
+    build: .
+    container_name: collectabase
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - DATABASE_URL=sqlite:///app/data/games.db
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
+    restart: unless-stopped
