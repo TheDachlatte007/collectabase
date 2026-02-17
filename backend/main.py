@@ -14,8 +14,12 @@ load_dotenv()
 
 app = FastAPI(title="Collectabase", version="1.0.0")
 
+# Get absolute path to static directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
 # Serve frontend static files
-app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Initialize database on startup
 @app.on_event("startup")
@@ -373,14 +377,14 @@ async def get_stats():
 # Serve frontend
 @app.get("/")
 async def root():
-    return FileResponse("backend/static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 @app.get("/{path:path}")
 async def catch_all(path: str):
     """Catch-all for frontend routing"""
     if path.startswith("api/"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
-    return FileResponse("backend/static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn

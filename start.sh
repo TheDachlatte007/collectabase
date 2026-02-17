@@ -1,0 +1,4 @@
+#!/bin/bash
+cd $(dirname "$0")/backend
+python3 -c "from database import init_db; init_db()"
+exec python3 main.py
