@@ -14,12 +14,12 @@ load_dotenv()
 
 app = FastAPI(title="Collectabase", version="1.0.0")
 
-# Get absolute path to static directory
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
+# Get absolute path to frontend dist directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up one level to /app
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend", "dist")
 
-# Serve frontend static files
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Serve frontend assets
+app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
 
 # Initialize database on startup
 @app.on_event("startup")
@@ -377,14 +377,21 @@ async def get_stats():
 # Serve frontend
 @app.get("/")
 async def root():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 @app.get("/{path:path}")
 async def catch_all(path: str):
     """Catch-all for frontend routing"""
     if path.startswith("api/"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    
+    # Check if file exists
+    file_path = os.path.join(FRONTEND_DIR, path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    
+    # Otherwise serve index.html for SPA routing
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
