@@ -239,13 +239,14 @@ async def lookup_igdb(title: str):
             # Format results
             results = []
             for game in games:
+                raw_url = game.get("cover", {}).get("url", "") if game.get("cover") else None
                 results.append({
                     "igdb_id": game.get("id"),
                     "title": game.get("name"),
                     "release_date": game.get("first_release_date"),
                     "genre": ", ".join([g.get("name", "") for g in game.get("genres", [])]),
                     "platforms": [p.get("name", "") for p in game.get("platforms", [])],
-                    "cover_url": game.get("cover", {}).get("url", "").replace("t_thumb", "t_cover_big") if game.get("cover") else None,
+                    "cover_url": ("https:" + raw_url.replace("t_thumb", "t_cover_big")) if raw_url else None,
                     "description": game.get("summary", "")
                 })
             

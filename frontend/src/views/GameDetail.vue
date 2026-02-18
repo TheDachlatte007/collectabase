@@ -24,7 +24,7 @@
             <p class="text-muted">{{ game.platform_name }}</p>
           </div>
           <div class="actions">
-            <router-link :to="`/add`" class="btn btn-secondary" @click="editGame">Edit</router-link>
+            <router-link :to="`/edit/${game.id}`" class="btn btn-secondary">Edit</router-link>
             <button @click="deleteGame" class="btn btn-danger">Delete</button>
           </div>
         </div>
@@ -106,11 +106,6 @@ async function deleteGame() {
   } catch (e) {
     console.error('Failed to delete:', e)
   }
-}
-
-function editGame() {
-  // TODO: Implement edit mode
-  alert('Edit mode - copy values to Add form')
 }
 
 onMounted(loadGame)

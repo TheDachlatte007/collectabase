@@ -15,6 +15,7 @@ const routes = [
   { path: '/', component: GamesList },
   { path: '/game/:id', component: GameDetail, props: true },
   { path: '/add', component: AddGame },
+  { path: '/edit/:id', component: AddGame },
   { path: '/wishlist', component: Wishlist },
   { path: '/import', component: Import },
   { path: '/stats', component: Stats },

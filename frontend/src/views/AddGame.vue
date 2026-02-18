@@ -1,7 +1,7 @@
 <template>
   <div class="container">
-    <h1 class="mb-3">Add Game</h1>
-    
+    <h1 class="mb-3">{{ isEditMode ? 'Edit Game' : 'Add Game' }}</h1>
+
     <div class="form-layout">
       <!-- IGDB Search -->
       <div class="card mb-3">
@@ -105,7 +105,7 @@
 
         <div class="flex gap-2 mt-3">
           <button type="submit" class="btn btn-primary" :disabled="saving">
-            {{ saving ? 'Saving...' : 'Save Game' }}
+            {{ saving ? 'Saving...' : (isEditMode ? 'Update Game' : 'Save Game') }}
           </button>
           <router-link to="/" class="btn btn-secondary">Cancel</router-link>
         </div>
@@ -116,14 +116,17 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const platforms = ref([])
 const saving = ref(false)
 const igdbSearch = ref('')
 const igdbResults = ref([])
 const igdbLoading = ref(false)
+const isEditMode = ref(false)
+const editId = ref(null)
 
 const game = ref({
   title: '',
@@ -141,6 +144,33 @@ const game = ref({
 async function loadPlatforms() {
   const res = await fetch('/api/platforms')
   platforms.value = await res.json()
+}
+
+async function loadGame(id) {
+  try {
+    const res = await fetch(`/api/games/${id}`)
+    if (res.ok) {
+      const data = await res.json()
+      game.value = {
+        title: data.title || '',
+        platform_id: data.platform_id || '',
+        barcode: data.barcode || '',
+        region: data.region || '',
+        condition: data.condition || '',
+        completeness: data.completeness || '',
+        purchase_price: data.purchase_price || null,
+        current_value: data.current_value || null,
+        notes: data.notes || '',
+        is_wishlist: data.is_wishlist || false,
+        igdb_id: data.igdb_id || null,
+        cover_url: data.cover_url || null,
+        genre: data.genre || null,
+        description: data.description || null,
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load game:', e)
+  }
 }
 
 async function searchIgdb() {
@@ -173,13 +203,15 @@ function fillFromIgdb(result) {
 async function saveGame() {
   saving.value = true
   try {
-    const res = await fetch('/api/games', {
-      method: 'POST',
+    const url = isEditMode.value ? `/api/games/${editId.value}` : '/api/games'
+    const method = isEditMode.value ? 'PUT' : 'POST'
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(game.value)
     })
     if (res.ok) {
-      router.push('/')
+      router.push(isEditMode.value ? `/game/${editId.value}` : '/')
     }
   } catch (e) {
     console.error('Failed to save:', e)
@@ -188,8 +220,16 @@ async function saveGame() {
   }
 }
 
-onMounted(loadPlatforms)
+onMounted(async () => {
+  await loadPlatforms()
+  if (route.params.id) {
+    isEditMode.value = true
+    editId.value = route.params.id
+    await loadGame(route.params.id)
+  }
+})
 </script>
+
 
 <style scoped>
 .form-layout {

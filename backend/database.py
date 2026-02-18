@@ -43,6 +43,7 @@ def init_db():
                 notes TEXT,
                 is_wishlist INTEGER DEFAULT 0,
                 wishlist_max_price REAL,
+                item_type TEXT DEFAULT 'game',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (platform_id) REFERENCES platforms(id)
@@ -83,8 +84,14 @@ def init_db():
             ("Sega Genesis/Mega Drive", "Sega", "Console"),
             ("Sega Master System", "Sega", "Console"),
             ("Sega Game Gear", "Sega", "Handheld"),
-        ]
-        
+            ]
+        # Migration: add item_type if not exists
+        try:
+            db.execute("ALTER TABLE games ADD COLUMN item_type TEXT DEFAULT 'game'")
+            db.commit()
+        except:
+            pass  # Column already exists, ignore
+
         for name, manufacturer, type_ in default_platforms:
             try:
                 db.execute(
@@ -95,6 +102,29 @@ def init_db():
                 pass
         
         db.commit()
+        
+        # Auto-classify existing entries based on platform type
+        db.execute("""
+            UPDATE games SET item_type = 'console'
+            WHERE item_type = 'game'
+            AND platform_id IN (
+                SELECT id FROM platforms WHERE type IN ('Console', 'Handheld')
+            )
+            AND (
+                LOWER(title) LIKE '%console%'
+                OR LOWER(title) LIKE '%system%'
+                OR LOWER(title) LIKE '% wii %'
+                OR LOWER(title) LIKE '%nintendo wii%'
+                OR LOWER(title) LIKE '%playstation%'
+                OR LOWER(title) LIKE '%xbox%'
+                OR LOWER(title) LIKE '%game boy%'
+                OR LOWER(title) LIKE '%gameboy%'
+                OR LOWER(title) LIKE '%nintendo 64%'
+                OR LOWER(title) LIKE '%dreamcast%'
+            )
+        """)
+        db.commit()
+
 
 @contextmanager
 def get_db():
