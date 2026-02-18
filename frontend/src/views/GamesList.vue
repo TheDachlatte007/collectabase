@@ -14,6 +14,13 @@
             {{ p.name }}
           </option>
         </select>
+        <select v-model="selectedType" class="filter-select">
+          <option value="">All Types</option>
+          <option value="game">🎮 Games</option>
+          <option value="console">🖥️ Consoles</option>
+          <option value="accessory">🕹️ Accessories</option>
+          <option value="misc">📦 Misc</option>
+        </select>
       </div>
     </div>
 
@@ -35,6 +42,7 @@
           <div class="meta">
             <span v-if="game.condition" class="badge">{{ game.condition }}</span>
             <span v-if="game.completeness" class="badge">{{ game.completeness }}</span>
+            <span v-if="game.item_type" class="badge type-badge">{{ typeLabel(game.item_type) }}</span>
           </div>
           <p v-if="game.current_value" class="value">€{{ game.current_value }}</p>
         </div>
@@ -52,14 +60,26 @@ const platforms = ref([])
 const loading = ref(true)
 const search = ref('')
 const selectedPlatform = ref('')
+const selectedType = ref('')
 
 const filteredGames = computed(() => {
   return games.value.filter(g => {
     const matchesSearch = g.title.toLowerCase().includes(search.value.toLowerCase())
     const matchesPlatform = !selectedPlatform.value || g.platform_id === selectedPlatform.value
-    return matchesSearch && matchesPlatform
+    const matchesType = !selectedType.value || g.item_type === selectedType.value
+    return matchesSearch && matchesPlatform && matchesType
   })
 })
+
+function typeLabel(type) {
+  const labels = {
+    game: '🎮 Game',
+    console: '🖥️ Console',
+    accessory: '🕹️ Accessory',
+    misc: '📦 Misc'
+  }
+  return labels[type] || type
+}
 
 function coverStyle(url) {
   return url ? { backgroundImage: `url(${url})` } : {}
@@ -150,4 +170,10 @@ onMounted(loadData)
   position: absolute;
   inset: 0;
 }
+
+.type-badge {
+  background: var(--primary, #6366f1);
+  color: white;
+}
+
 </style>

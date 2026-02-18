@@ -7,6 +7,7 @@ import httpx
 import csv
 import io
 import os
+import sqlite3
 from .database import get_db, init_db, dict_from_row
 from dotenv import load_dotenv
 
@@ -246,6 +247,12 @@ async def lookup_igdb(search:IGDBSearch):
             results = []
             for game in games:
                 raw_url = game.get("cover", {}).get("url", "") if game.get("cover") else None
+                # Extract developer and publisher from involved companies
+                companies = game.get("involved_companies", [])
+                developer = next((c["company"]["name"] for c in companies 
+                                if c.get("developer") and c.get("company")), None)
+                publisher = next((c["company"]["name"] for c in companies 
+                                if c.get("publisher") and c.get("company")), None)
                 results.append({
                     "igdb_id": game.get("id"),
                     "title": game.get("name"),
@@ -253,13 +260,130 @@ async def lookup_igdb(search:IGDBSearch):
                     "genre": ", ".join([g.get("name", "") for g in game.get("genres", [])]),
                     "platforms": [p.get("name", "") for p in game.get("platforms", [])],
                     "cover_url": ("https:" + raw_url.replace("t_thumb", "t_cover_big")) if raw_url else None,
-                    "description": game.get("summary", "")
+                    "description": game.get("summary", ""),
+                    "developer": developer,
+                    "publisher": publisher,
                 })
             
             return {"results": results}
     
     except Exception as e:
         return {"error": str(e)}
+    
+
+# GameTDB Platform Mapping
+GAMETDB_PLATFORMS = {
+    'wii': 'wii',
+    'wii u': 'wiiu', 
+    'gamecube': 'gc',
+    'nintendo ds': 'ds',
+    'nintendo 3ds': '3ds',
+    'new nintendo 3ds': '3ds',
+    'ps3': 'ps3',
+    'playstation 3': 'ps3',
+    'xbox 360': '360',
+}
+
+def get_gametdb_platform(platform_name: str) -> Optional[str]:
+    """Map platform name to GameTDB platform code"""
+    name_lower = platform_name.lower()
+    for key, code in GAMETDB_PLATFORMS.items():
+        if key in name_lower:
+            return code
+    return None
+
+def extract_gametdb_id(barcode: str) -> Optional[str]:
+    """Extract GameTDB game ID from barcode"""
+    if not barcode:
+        return None
+    # Nintendo barcodes: first 4-6 chars are the game ID
+    cleaned = barcode.replace('-', '').strip()
+    if len(cleaned) >= 4:
+        return cleaned[:6].upper()
+    return None
+
+@app.post("/api/lookup/gametdb")
+async def lookup_gametdb(search: IGDBSearch):
+    """Search GameTDB for cover art by title"""
+    title = search.title
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # GameTDB search API
+            response = await client.get(
+                "https://www.gametdb.com/api.php",
+                params={
+                    "xml": 1,
+                    "lang": "EN",
+                    "name": title,
+                    "region": "EN"
+                },
+                headers={"User-Agent": "Collectabase/1.0"}
+            )
+            
+            if response.status_code != 200:
+                return {"results": []}
+            
+            # Parse XML response
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(response.text)
+            
+            results = []
+            for game in root.findall('.//game')[:5]:
+                game_id = game.findtext('id', '')
+                platform_elem = game.findtext('type', '')
+                title_text = game.findtext('locale[@lang="EN"]/title') or game.findtext('title', '')
+                
+                # Build cover URLs
+                cover_url = None
+                if game_id and platform_elem:
+                    cover_url = f"https://art.gametdb.com/{platform_elem}/cover/EN/{game_id}.png"
+                
+                results.append({
+                    "source": "gametdb",
+                    "gametdb_id": game_id,
+                    "title": title_text,
+                    "platform": platform_elem,
+                    "cover_url": cover_url,
+                    "cover_front": f"https://art.gametdb.com/{platform_elem}/coverfull/EN/{game_id}.png" if game_id else None,
+                    "disc_art": f"https://art.gametdb.com/{platform_elem}/disc/EN/{game_id}.png" if game_id else None,
+                })
+            
+            return {"results": results}
+    
+    except Exception as e:
+        return {"error": str(e), "results": []}
+
+
+@app.post("/api/lookup/combined")
+async def lookup_combined(search: IGDBSearch):
+    """Search both IGDB and GameTDB, return combined results"""
+    title = search.title
+    
+    # Run both searches
+    igdb_results = []
+    gametdb_results = []
+    
+    # IGDB Search
+    try:
+        igdb_response = await lookup_igdb(search)
+        igdb_results = igdb_response.get("results", [])
+        for r in igdb_results:
+            r["source"] = "igdb"
+    except:
+        pass
+    
+    # GameTDB Search
+    try:
+        gametdb_response = await lookup_gametdb(search)
+        gametdb_results = gametdb_response.get("results", [])
+    except:
+        pass
+    
+    return {
+        "igdb": igdb_results,
+        "gametdb": gametdb_results
+    }
 
 # CSV Import
 @app.post("/api/import/csv")
@@ -387,6 +511,19 @@ async def get_stats():
         """)
         by_condition = [dict_from_row(row) for row in cursor.fetchall()]
         
+        # By item type
+        cursor = db.execute("""
+            SELECT item_type, COUNT(*) as count,
+                   COALESCE(SUM(current_value), 0) as value,
+                   COALESCE(SUM(purchase_price), 0) as invested
+            FROM games
+            WHERE is_wishlist = 0
+            GROUP BY item_type
+            ORDER BY count DESC
+        """)
+        by_type = [dict_from_row(row) for row in cursor.fetchall()]
+
+
         return {
             "total_games": total_games,
             "total_value": round(total_value, 2),
@@ -394,7 +531,8 @@ async def get_stats():
             "profit_loss": round(total_value - purchase_value, 2),
             "wishlist_count": wishlist_count,
             "by_platform": by_platform,
-            "by_condition": by_condition
+            "by_condition": by_condition,
+            "by_type": by_type
         }
 
 # Serve frontend

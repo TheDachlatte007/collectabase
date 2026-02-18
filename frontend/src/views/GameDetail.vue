@@ -30,6 +30,10 @@
         </div>
 
         <div class="details-grid">
+          <div v-if="game.item_type" class="detail-item">
+            <label>Type</label>
+            <span>{{ game.item_type.charAt(0).toUpperCase() + game.item_type.slice(1) }}</span>
+          </div>
           <div v-if="game.region" class="detail-item">
             <label>Region</label>
             <span>{{ game.region }}</span>
@@ -58,11 +62,33 @@
             <label>Location</label>
             <span>{{ game.location }}</span>
           </div>
+          <div v-if="game.genre" class="detail-item">
+            <label>Genre</label>
+            <span>{{ game.genre }}</span>
+          </div>
+          <div v-if="game.developer" class="detail-item">
+            <label>Developer</label>
+            <span>{{ game.developer }}</span>
+          </div>
+          <div v-if="game.publisher" class="detail-item">
+            <label>Publisher</label>
+            <span>{{ game.publisher }}</span>
+          </div>
+          <div v-if="game.current_value && game.purchase_price" class="detail-item">
+            <label>Profit/Loss</label>
+            <span :class="game.current_value >= game.purchase_price ? 'profit' : 'loss'">
+              {{ game.current_value >= game.purchase_price ? '+' : '' }}€{{ (game.current_value - game.purchase_price).toFixed(2) }}
+            </span>
+          </div>
         </div>
 
         <div v-if="game.notes" class="notes mt-3">
           <label>Notes</label>
           <p>{{ game.notes }}</p>
+        </div>
+        <div v-if="game.description" class="notes mt-3">
+          <label>Description</label>
+          <p>{{ game.description }}</p>
         </div>
       </div>
     </div>
@@ -189,4 +215,8 @@ onMounted(loadGame)
   color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
+
+.profit { color: var(--success); font-weight: bold; }
+.loss { color: #ef4444; font-weight: bold; }
+
 </style>

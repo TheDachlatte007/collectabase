@@ -34,6 +34,33 @@
       </div>
     </div>
 
+    <!-- By Type -->                                        <!-- ← NEU -->
+    <div v-if="stats.by_type?.length" class="card mt-3">
+      <h3 class="mb-2">By Type</h3>
+      <table class="stats-table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Count</th>
+            <th>Value</th>
+            <th>Invested</th>
+            <th>Profit/Loss</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="t in stats.by_type" :key="t.type">
+            <td>{{ t.type }}</td>
+            <td>{{ t.count }}</td>
+            <td>€{{ formatNumber(t.value) }}</td>
+            <td>€{{ formatNumber(t.invested) }}</td>
+            <td :class="(t.value - t.invested) >= 0 ? 'text-success' : 'text-error'">
+              {{ (t.value - t.invested) >= 0 ? '+' : '' }}€{{ formatNumber(t.value - t.invested) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>                                                  <!-- ← NEU ENDE -->
+
     <!-- Platform Distribution -->
     <div v-if="stats.by_platform?.length" class="card mt-3">
       <h3 class="mb-2">By Platform</h3>
@@ -67,7 +94,7 @@ const stats = ref({
   profit_loss: 0,
   wishlist_count: 0,
   by_platform: [],
-  by_condition: []
+  by_type: []        // ← NEU
 })
 const loading = ref(true)
 

@@ -15,14 +15,15 @@
         <div v-if="igdbResults.length === 0 && igdbSearch && !igdbLoading" class="text-muted mt-2">
           No results found
         </div>
-        <div v-for="result in igdbResults" :key="result.igdb_id" 
-             class="igdb-item" @click="fillFromIgdb(result)">
-          <img v-if="result.cover_url" :src="result.cover_url" />
-          <div>
-            <strong>{{ result.title }}</strong>
-            <p class="text-muted">{{ result.platforms?.join(', ') }}</p>
-          </div>
+        <div v-for="result in igdbResults" :key="result.igdb_id || result.gametdb_id" 
+            class="igdb-item" @click="fillFromIgdb(result)">
+        <img v-if="result.cover_url" :src="result.cover_url" />
+        <div>
+          <strong>{{ result.title }}</strong>
+          <p class="text-muted">{{ result.platforms?.join(', ') || result.platform }}</p>
+          <span class="source-badge">{{ result.source === 'gametdb' ? '🖼️ GameTDB' : '🎮 IGDB' }}</span>
         </div>
+      </div>
       </div>
 
       <!-- Game Form -->
@@ -191,27 +192,72 @@ async function searchIgdb() {
   if (!igdbSearch.value) return
   igdbLoading.value = true
   try {
-    const res = await fetch('/api/lookup/igdb', {
+    const res = await fetch('/api/lookup/combined', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: igdbSearch.value })
     })
     const data = await res.json()
-    igdbResults.value = data.results || []
+    igdbResults.value = data.results || [
+      ...(data.igdb || []),
+      ...(data.gametdb || [])
+    ]
   } catch (e) {
-    console.error('IGDB search failed:', e)
+    console.error('Search failed:', e)
   } finally {
     igdbLoading.value = false
   }
 }
 
 function fillFromIgdb(result) {
+  // Gemeinsame Felder
   game.value.title = result.title
-  game.value.igdb_id = result.igdb_id
   game.value.cover_url = result.cover_url
-  game.value.genre = result.genre
-  game.value.description = result.description
+
+  if (result.source === 'igdb') {
+    game.value.igdb_id = result.igdb_id
+    game.value.genre = result.genre
+    game.value.description = result.description
+    game.value.release_date = result.release_date
+    game.value.developer = result.developer || null
+    game.value.publisher = result.publisher || null
+    // Platform auto-match: suche passende Platform in der Liste
+    if (result.platforms?.length > 0) {
+      const match = platforms.value.find(p => 
+        result.platforms.some(rp => 
+          rp.toLowerCase().includes(p.name.toLowerCase()) || 
+          p.name.toLowerCase().includes(rp.toLowerCase())
+        )
+      )
+      if (match) game.value.platform_id = match.id
+    }
+  }
+
+  if (result.source === 'gametdb') {
+    game.value.gametdb_id = result.gametdb_id
+    // GameTDB Cover: bevorzuge coverfull über cover
+    game.value.cover_url = result.cover_front || result.cover_url
+    // Platform auto-match über GameTDB platform code
+    const platformMap = {
+      'wii': 'Wii',
+      'wiiu': 'Wii U',
+      'gc': 'GameCube',
+      'ds': 'Nintendo DS',
+      '3ds': 'Nintendo 3DS',
+      'ps3': 'PlayStation 3',
+      '360': 'Xbox 360',
+    }
+    const platformName = platformMap[result.platform]
+    if (platformName) {
+      const match = platforms.value.find(p => 
+        p.name.toLowerCase().includes(platformName.toLowerCase())
+      )
+      if (match) game.value.platform_id = match.id
+    }
+  }
+
   igdbResults.value = []
+  igdbSearch.value = ''
 }
 
 async function saveGame() {
@@ -284,5 +330,11 @@ onMounted(async () => {
   height: 80px;
   object-fit: cover;
   border-radius: 0.25rem;
+}
+.source-badge {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  display: block;
 }
 </style>
