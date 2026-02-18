@@ -15,13 +15,12 @@
         <div v-if="igdbResults.length === 0 && igdbSearch && !igdbLoading" class="text-muted mt-2">
           No results found
         </div>
-          <div v-for="result in igdbResults" :key="result.igdb_id" 
-               class="igdb-item" @click="fillFromIgdb(result)">
-            <img v-if="result.cover_url" :src="result.cover_url" />
-            <div>
-              <strong>{{ result.title }}</strong>
-              <p class="text-muted">{{ result.platforms?.join(', ') }}</p>
-            </div>
+        <div v-for="result in igdbResults" :key="result.igdb_id" 
+             class="igdb-item" @click="fillFromIgdb(result)">
+          <img v-if="result.cover_url" :src="result.cover_url" />
+          <div>
+            <strong>{{ result.title }}</strong>
+            <p class="text-muted">{{ result.platforms?.join(', ') }}</p>
           </div>
         </div>
       </div>
@@ -124,7 +123,7 @@
         </div>
       </form>
     </div>
-  </div>
+      </div>
 </template>
 
 <script setup>
