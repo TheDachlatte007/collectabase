@@ -12,7 +12,9 @@
             {{ igdbLoading ? 'Searching...' : 'Search' }}
           </button>
         </div>
-        <div v-if="igdbResults.length > 0" class="igdb-results">
+        <div v-if="igdbResults.length === 0 && igdbSearch && !igdbLoading" class="text-muted mt-2">
+          No results found
+        </div>
           <div v-for="result in igdbResults" :key="result.igdb_id" 
                class="igdb-item" @click="fillFromIgdb(result)">
             <img v-if="result.cover_url" :src="result.cover_url" />
@@ -39,6 +41,17 @@
               <option v-for="p in platforms" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
+
+          <div class="form-group">
+            <label>Type</label>
+            <select v-model="game.item_type">
+              <option value="game">Game</option>
+              <option value="console">Console</option>
+              <option value="accessory">Accessory</option>
+              <option value="misc">Misc</option>
+            </select>
+          </div>
+
 
           <div class="form-group">
             <label>Barcode</label>
@@ -131,6 +144,7 @@ const editId = ref(null)
 const game = ref({
   title: '',
   platform_id: '',
+  item_type: 'game', 
   barcode: '',
   region: '',
   condition: '',
@@ -154,6 +168,7 @@ async function loadGame(id) {
       game.value = {
         title: data.title || '',
         platform_id: data.platform_id || '',
+        item_type: data.item_type || 'game',
         barcode: data.barcode || '',
         region: data.region || '',
         condition: data.condition || '',

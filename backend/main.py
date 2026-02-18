@@ -27,9 +27,13 @@ async def startup_event():
     init_db()
 
 # Pydantic Models
+class IGDBSearch(BaseModel):
+    title: str
+
 class GameCreate(BaseModel):
     title: str
     platform_id: int
+    item_type: Optional[str] = 'game'  # ← NEU
     barcode: Optional[str] = None
     igdb_id: Optional[int] = None
     release_date: Optional[str] = None
@@ -99,19 +103,20 @@ async def create_game(game: GameCreate):
     with get_db() as db:
         cursor = db.execute("""
             INSERT INTO games (
-                title, platform_id, barcode, igdb_id, release_date,
+                title, platform_id, item_type, barcode, igdb_id, release_date,
                 publisher, developer, genre, description, cover_url,
                 region, condition, completeness, location,
                 purchase_date, purchase_price, current_value, notes,
                 is_wishlist, wishlist_max_price
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            game.title, game.platform_id, game.barcode, game.igdb_id, game.release_date,
+            game.title, game.platform_id, game.item_type, game.barcode, game.igdb_id, game.release_date,
             game.publisher, game.developer, game.genre, game.description, game.cover_url,
             game.region, game.condition, game.completeness, game.location,
             game.purchase_date, game.purchase_price, game.current_value, game.notes,
             1 if game.is_wishlist else 0, game.wishlist_max_price
         ))
+
         db.commit()
         return {"id": cursor.lastrowid, "message": "Game created successfully"}
 
@@ -141,14 +146,14 @@ async def update_game(game_id: int, game: GameUpdate):
         
         db.execute("""
             UPDATE games SET
-                title = ?, platform_id = ?, barcode = ?, igdb_id = ?, release_date = ?,
+                title = ?, platform_id = ?, item_type = ?, barcode = ?, igdb_id = ?, release_date = ?,
                 publisher = ?, developer = ?, genre = ?, description = ?, cover_url = ?,
                 region = ?, condition = ?, completeness = ?, location = ?,
                 purchase_date = ?, purchase_price = ?, current_value = ?, notes = ?,
                 is_wishlist = ?, wishlist_max_price = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (
-            game.title, game.platform_id, game.barcode, game.igdb_id, game.release_date,
+            game.title, game.platform_id, game.item_type, game.barcode, game.igdb_id, game.release_date,
             game.publisher, game.developer, game.genre, game.description, game.cover_url,
             game.region, game.condition, game.completeness, game.location,
             game.purchase_date, game.purchase_price, game.current_value, game.notes,
@@ -194,8 +199,9 @@ async def create_platform(platform: PlatformCreate):
 
 # IGDB Integration
 @app.post("/api/lookup/igdb")
-async def lookup_igdb(title: str):
+async def lookup_igdb(search:IGDBSearch):
     """Search IGDB by title"""
+    title = search.title
     client_id = os.getenv("IGDB_CLIENT_ID")
     client_secret = os.getenv("IGDB_CLIENT_SECRET")
     
@@ -282,23 +288,39 @@ async def import_csv(file: UploadFile = File(...)):
                 if platform_row:
                     platform_id = platform_row[0]
                 else:
-                    # Create platform
+                    # Create platform with auto-detected type
+                    platform_type = "Console" if any(k in platform_name.lower() for k in [
+                        'playstation', 'xbox', 'nintendo', 'wii', 'gameboy', 'game boy',
+                        'sega', 'dreamcast', 'saturn', 'genesis', '3ds', 'ds', 'psp', 'vita'
+                    ]) else "Other"
                     cursor = db.execute(
-                        "INSERT INTO platforms (name) VALUES (?)",
-                        (platform_name,)
+                        "INSERT INTO platforms (name, type) VALUES (?, ?)",
+                        (platform_name, platform_type)
                     )
                     platform_id = cursor.lastrowid
+
+                # Auto-detect item_type
+                title_lower = row.get('Title', row.get('title', '')).lower()
+                item_type = row.get('Type', row.get('item_type', '')).lower()
+                if not item_type:
+                    if any(k in title_lower for k in ['gameboy', 'game boy', 'nintendo',
+                                                    'playstation', 'xbox', 'dreamcast',
+                                                    'console', 'system']):
+                        item_type = 'console'
+                    else:
+                        item_type = 'game'
                 
                 # Insert game
                 db.execute("""
                     INSERT INTO games (
-                        title, platform_id, barcode, region, condition,
+                        title, platform_id, item_type, barcode, region, condition,
                         completeness, location, purchase_price, current_value,
                         notes, is_wishlist
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     row.get('Title', row.get('title', 'Unknown')),
                     platform_id,
+                    item_type,
                     row.get('Barcode', row.get('barcode')),
                     row.get('Region', row.get('region')),
                     row.get('Condition', row.get('condition')),
