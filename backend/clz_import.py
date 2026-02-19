@@ -3,7 +3,7 @@ import io
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
-from database import SessionLocal, Game, Platform
+from .database import SessionLocal, Game, Platform
 
 router = APIRouter()
 
