@@ -15,3 +15,8 @@ services:
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
     restart: unless-stopped
 
+volumes:
+  collectabase_data:
+    external: true
+  collectabase_uploads:
+    external: true
