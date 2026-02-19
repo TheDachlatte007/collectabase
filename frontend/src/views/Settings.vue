@@ -51,6 +51,24 @@
       </div>
     </div>
 
+    <!-- CLZ Import -->
+    <div class="card mb-3">
+    <h3>CLZ / Collectorz Import</h3>
+    <p class="text-muted">Importiert CLZ Game Collector CSV Export direkt.</p>
+    <div class="flex gap-2 items-center">
+        <input type="file" accept=".csv" @change="onClzFile" ref="clzInput" />
+        <button class="btn btn-primary" @click="importClz" :disabled="!clzFile || clzLoading">
+        {{ clzLoading ? 'Importiere...' : 'CLZ Import' }}
+        </button>
+    </div>
+    <div v-if="clzResult" class="mt-2">
+        <p class="text-success">✅ {{ clzResult.imported }} importiert</p>
+        <p v-if="clzResult.skipped" class="text-muted">⚠️ {{ clzResult.skipped }} übersprungen</p>
+        <p v-for="err in clzResult.errors" :key="err" class="text-danger">❌ {{ err }}</p>
+    </div>
+    </div>
+
+
     <!-- Database -->
     <div class="card mb-3">
       <h3 class="mb-2">🗄 Database</h3>
@@ -81,6 +99,32 @@ const enrichLimit = ref(500)
 const enrichProgress = ref({ success: 0, failed: 0, total: 0 })
 const clearing = ref(false)
 const clearDone = ref(false)
+const clzFile = ref(null)
+const clzLoading = ref(false)
+const clzResult = ref(null)
+
+function onClzFile(e) {
+  clzFile.value = e.target.files[0]
+}
+
+async function importClz() {
+  if (!clzFile.value) return
+  clzLoading.value = true
+  clzResult.value = null
+  const formData = new FormData()
+  formData.append('file', clzFile.value)
+  try {
+    const res = await fetch('/api/import/clz', {
+      method: 'POST',
+      body: formData
+    })
+    clzResult.value = await res.json()
+  } catch (e) {
+    clzResult.value = { imported: 0, skipped: 0, errors: ['Import fehlgeschlagen'] }
+  } finally {
+    clzLoading.value = false
+  }
+}
 
 async function loadInfo() {
   try {

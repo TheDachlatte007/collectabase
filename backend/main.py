@@ -3,6 +3,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
+from clz_import import router as clz_router
+app.include_router(clz_router)
 import httpx
 import csv
 import io
