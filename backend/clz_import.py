@@ -108,10 +108,10 @@ async def import_clz(file: UploadFile = File(...)):
         db.commit()
 
         # Auto-enrich games without cover
-        games_without_cover = db.query(Game).filter(
-            Game.cover_url == None,
-            Game.title != None
-        ).all()
+        games_without_cover = db.query(Game).filter(Game.cover_url.is_(None)).all()
+        for game in games_without_cover:
+            # IGDB lookup hier einfügen (gleicher Code wie im Enrich Button)
+            pass
 
         return {
             "imported": imported,
