@@ -10,7 +10,7 @@ services:
       - collectabase_data:/app/app/data
       - collectabase_uploads:/app/uploads
     environment:
-      - DATABASE_URL=sqlite:///app/data/games.db
+      - DATABASE_URL=sqlite:////app/app/data/games.db
       - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
     restart: unless-stopped
