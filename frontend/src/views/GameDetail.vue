@@ -25,6 +25,9 @@
           </div>
           <div class="actions">
             <router-link :to="`/edit/${game.id}`" class="btn btn-secondary">Edit</router-link>
+            <button @click="enrichCover" class="btn btn-secondary" :disabled="enriching">
+              {{ enriching ? '⏳ Fetching...' : '🖼 Enrich Cover' }}
+            </button>
             <button @click="deleteGame" class="btn btn-danger">Delete</button>
           </div>
         </div>
@@ -103,6 +106,20 @@ const route = useRoute()
 const router = useRouter()
 const game = ref(null)
 const loading = ref(true)
+const enriching = ref(false)
+
+async function enrichCover() {
+  enriching.value = true
+  try {
+    const res = await fetch(`/api/games/${route.params.id}/enrich`, { method: 'POST' })
+    if (res.ok) await loadGame()
+  } catch (e) {
+    console.error('Enrich failed:', e)
+  } finally {
+    enriching.value = false
+  }
+}
+
 
 function coverStyle(url) {
   return url ? { backgroundImage: `url(${url})` } : {}

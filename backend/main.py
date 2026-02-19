@@ -385,6 +385,87 @@ async def lookup_combined(search: IGDBSearch):
         "gametdb": gametdb_results
     }
 
+@app.post("/api/games/{game_id}/enrich")
+async def enrich_game_cover(game_id: int):
+    with get_db() as db:
+        row = db.execute("SELECT * FROM games WHERE id = ?", (game_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Game not found")
+        game = dict_from_row(row)
+
+    cover_url = None
+    try:
+        igdb_response = await lookup_igdb(IGDBSearch(title=game["title"]))
+        results = igdb_response.get("results", [])
+        if results and results[0].get("cover_url"):
+            cover_url = results[0]["cover_url"]
+    except:
+        pass
+
+    if not cover_url:
+        try:
+            gametdb_response = await lookup_gametdb(IGDBSearch(title=game["title"]))
+            results = gametdb_response.get("results", [])
+            if results and results[0].get("cover_url"):
+                cover_url = results[0]["cover_url"]
+        except:
+            pass
+
+    if not cover_url:
+        raise HTTPException(status_code=404, detail="No cover found")
+
+    with get_db() as db:
+        db.execute("UPDATE games SET cover_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (cover_url, game_id))
+        db.commit()
+
+    return {"cover_url": cover_url}
+
+
+@app.post("/api/enrich/all")
+async def enrich_all_covers(limit: int = 20):
+    """Bulk enrich covers for all items without a cover_url"""
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT * FROM games WHERE (cover_url IS NULL OR cover_url = '') AND is_wishlist = 0 LIMIT ?",
+            (limit,)
+        ).fetchall()
+        items = [dict_from_row(row) for row in rows]
+
+    results = {"success": 0, "failed": 0, "total": len(items)}
+
+    for item in items:
+        cover_url = None
+        try:
+            igdb_response = await lookup_igdb(IGDBSearch(title=item["title"]))
+            igdb_results = igdb_response.get("results", [])
+            if igdb_results and igdb_results[0].get("cover_url"):
+                cover_url = igdb_results[0]["cover_url"]
+        except:
+            pass
+
+        if not cover_url:
+            try:
+                gametdb_response = await lookup_gametdb(IGDBSearch(title=item["title"]))
+                gametdb_results = gametdb_response.get("results", [])
+                if gametdb_results and gametdb_results[0].get("cover_url"):
+                    cover_url = gametdb_results[0]["cover_url"]
+            except:
+                pass
+
+        if cover_url:
+            with get_db() as db:
+                db.execute(
+                    "UPDATE games SET cover_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (cover_url, item["id"])
+                )
+                db.commit()
+            results["success"] += 1
+        else:
+            results["failed"] += 1
+
+    return results
+
+
 # CSV Import
 @app.post("/api/import/csv")
 async def import_csv(file: UploadFile = File(...)):
