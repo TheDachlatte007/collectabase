@@ -466,6 +466,78 @@ async def enrich_all_covers(limit: int = 20):
     return results
 
 
+@app.get("/api/settings/info")
+async def settings_info():
+    """App info for settings page"""
+    import os
+    client_id = os.getenv("IGDB_CLIENT_ID")
+    db_path = os.getenv("DATABASE_URL", "sqlite:///app/data/games.db").replace("sqlite:///", "")
+    
+    try:
+        db_size_bytes = os.path.getsize(db_path)
+        db_size = f"{db_size_bytes / 1024:.1f} KB" if db_size_bytes < 1024*1024 else f"{db_size_bytes / 1024 / 1024:.1f} MB"
+    except:
+        db_size = "Unknown"
+
+    with get_db() as db:
+        total_items = db.execute("SELECT COUNT(*) FROM games WHERE is_wishlist = 0").fetchone()[0]
+        missing_covers = db.execute("SELECT COUNT(*) FROM games WHERE (cover_url IS NULL OR cover_url = '') AND is_wishlist = 0").fetchone()[0]
+        wishlist_count = db.execute("SELECT COUNT(*) FROM games WHERE is_wishlist = 1").fetchone()[0]
+
+    return {
+        "version": "1.0.0",
+        "igdb_configured": bool(client_id),
+        "total_items": total_items,
+        "missing_covers": missing_covers,
+        "wishlist_count": wishlist_count,
+        "db_size": db_size
+    }
+
+
+@app.get("/api/export/csv")
+async def export_csv():
+    """Export entire collection as CSV"""
+    from fastapi.responses import StreamingResponse
+    import csv, io
+
+    with get_db() as db:
+        cursor = db.execute("""
+            SELECT g.title, p.name as platform, g.item_type, g.region, g.condition,
+                   g.completeness, g.barcode, g.purchase_price, g.current_value,
+                   g.purchase_date, g.location, g.notes, g.developer, g.publisher,
+                   g.genre, g.is_wishlist
+            FROM games g
+            LEFT JOIN platforms p ON g.platform_id = p.id
+            ORDER BY p.name, g.title
+        """)
+        rows = cursor.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Title','Platform','Type','Region','Condition','Completeness',
+                     'Barcode','Purchase Price','Current Value','Purchase Date',
+                     'Location','Notes','Developer','Publisher','Genre','Wishlist'])
+    for row in rows:
+        writer.writerow(list(row))
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=collectabase_export.csv"}
+    )
+
+
+@app.post("/api/settings/clear-covers")
+async def clear_all_covers():
+    """Remove all cover URLs from database"""
+    with get_db() as db:
+        db.execute("UPDATE games SET cover_url = NULL")
+        db.commit()
+    return {"message": "All covers cleared"}
+
+
+
 # CSV Import
 @app.post("/api/import/csv")
 async def import_csv(file: UploadFile = File(...)):

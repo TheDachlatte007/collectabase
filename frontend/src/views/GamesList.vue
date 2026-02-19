@@ -34,7 +34,7 @@
     <div v-else class="grid">
       <div v-for="game in filteredGames" :key="game.id" class="game-card">
         <div class="cover" :style="coverStyle(game.cover_url)">
-          <span v-if="!game.cover_url">🎮</span>
+          <span v-if="!game.cover_url">{{ coverEmoji(game.item_type) }}</span>
         </div>
         <div class="info">
           <h3>{{ game.title }}</h3>
@@ -83,6 +83,16 @@ function typeLabel(type) {
 
 function coverStyle(url) {
   return url ? { backgroundImage: `url(${url})` } : {}
+}
+
+function coverEmoji(type) {
+  const emojis = {
+    game: '🎮',
+    console: '🖥️',
+    accessory: '🕹️',
+    misc: '📦'
+  }
+  return emojis[type] || '🎮'
 }
 
 async function loadData() {

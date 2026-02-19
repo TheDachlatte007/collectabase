@@ -10,6 +10,7 @@ import AddGame from './views/AddGame.vue'
 import Wishlist from './views/Wishlist.vue'
 import Import from './views/Import.vue'
 import Stats from './views/Stats.vue'
+import Settings from './views/Settings.vue'
 
 const routes = [
   { path: '/', component: GamesList },
@@ -19,6 +20,7 @@ const routes = [
   { path: '/wishlist', component: Wishlist },
   { path: '/import', component: Import },
   { path: '/stats', component: Stats },
+  { path: '/settings', component: Settings },
 ]
 
 const router = createRouter({
