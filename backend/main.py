@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
-from .clz_import import router as clz_router
+#from .clz_import import router as clz_router
 import httpx
 import csv
 import io
@@ -16,7 +16,7 @@ load_dotenv()
 
 app = FastAPI(title="Collectabase", version="1.0.0")
 
-app.include_router(clz_router)
+#app.include_router(clz_router)
 
 # Get absolute path to frontend dist directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up one level to /app
