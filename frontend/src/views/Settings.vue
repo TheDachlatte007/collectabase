@@ -86,6 +86,19 @@
       <div v-if="clearDone" class="result-box mt-2">✅ All covers cleared – run Bulk Enrich to re-fetch.</div>
     </div>
 
+    <!-- Database Reset -->
+    <div class="card mb-3">
+        <h3>🔥 Database Reset</h3>
+        <p class="text-muted">Löscht alle Games und Plattformen. Nur für Testing!</p>
+        <button @click="clearDatabase" class="btn btn-danger" :disabled="clearLoading">
+        {{ clearLoading ? 'Lösche...' : 'Clear Database' }}
+        </button>
+        <div v-if="clearResult" class="mt-2 p-2 bg-success text-white rounded">
+        ✅ {{ clearResult.message }}
+        </div>
+    </div>
+
+
   </div>
 </template>
 
@@ -102,6 +115,8 @@ const clearDone = ref(false)
 const clzFile = ref(null)
 const clzLoading = ref(false)
 const clzResult = ref(null)
+const clearLoading = ref(false)
+const clearResult = ref(null)
 
 function onClzFile(e) {
   clzFile.value = e.target.files[0]
@@ -171,6 +186,22 @@ async function clearCovers() {
     console.error('Clear covers failed:', e)
   } finally {
     clearing.value = false
+  }
+}
+
+async function clearDatabase() {
+  if (!confirm('Wirklich ALLES löschen? Das kann nicht rückgängig gemacht werden!')) return
+  
+  clearLoading.value = true
+  try {
+    const res = await fetch('/api/database/clear', { method: 'DELETE' })
+    clearResult.value = await res.json()
+    // Refresh Games List nach Clear
+    location.reload()
+  } catch (e) {
+    clearResult.value = { message: 'Fehler: ' + e.message }
+  } finally {
+    clearLoading.value = false
   }
 }
 

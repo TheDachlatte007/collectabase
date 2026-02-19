@@ -3,20 +3,20 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
-#from .clz_import import router as clz_router
+from .clz_import import router as clz_router
 import httpx
 import csv
 import io
 import os
 import sqlite3
-from .database import get_db, init_db, dict_from_row
+from .database import get_db, init_db, dict_from_row, SessionLocal, Game, Platform
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI(title="Collectabase", version="1.0.0")
 
-#app.include_router(clz_router)
+app.include_router(clz_router)
 
 # Get absolute path to frontend dist directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up one level to /app
@@ -738,6 +738,22 @@ async def catch_all(path: str):
     # Otherwise serve index.html for SPA routing
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
+
+
+# Database Reset (Dev only)
+@app.delete("/api/database/clear")
+async def clear_database():
+    with get_db() as db:
+            db.execute("DELETE FROM games")
+            db.execute("DELETE FROM platforms WHERE id > 1")
+            db.commit()
+            return {"message": "Database cleared successfully"}
+
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+
