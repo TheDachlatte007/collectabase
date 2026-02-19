@@ -9,7 +9,7 @@ import csv
 import io
 import os
 import sqlite3
-from .database import get_db, init_db, dict_from_row, SessionLocal, Game, Platform
+from .database import get_db, init_db, dict_from_row
 from dotenv import load_dotenv
 
 load_dotenv()
