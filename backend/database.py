@@ -1,3 +1,6 @@
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 import sqlite3
 import os
 from contextlib import contextmanager
@@ -125,6 +128,38 @@ def init_db():
             )
         """)
         db.commit()
+
+
+# SQLAlchemy Setup
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class Platform(Base):
+    __tablename__ = "platforms"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, unique=True)
+    manufacturer = Column(String)
+    type = Column(String)
+
+class Game(Base):
+    __tablename__ = "games"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    platform_id = Column(Integer, ForeignKey("platforms.id"))
+    # ... alle anderen Felder wie in deiner Tabelle
+
+# Tabelle erstellen
+Base.metadata.create_all(bind=engine)
+
+# Dependency für FastAPI
+def get_db() -> Session:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @contextmanager

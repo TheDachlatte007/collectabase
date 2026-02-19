@@ -3,7 +3,7 @@ import io
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
-from .database import SessionLocal, Game, Platform
+from .database import SessionLocal, Game, Platform, get_db 
 
 router = APIRouter()
 
@@ -38,7 +38,7 @@ async def import_clz(file: UploadFile = File(...)):
     except:
         text = content.decode("latin-1")
 
-    db: Session = SessionLocal()
+    db: Session = next(get_db())
     try:
         # Plattformen laden für Name→ID Mapping
         platforms = db.query(Platform).all()
@@ -104,6 +104,8 @@ async def import_clz(file: UploadFile = File(...)):
             except Exception as e:
                 errors.append(f"Zeile {i}: {title} → {str(e)}")
                 skipped += 1
+
+                db.execute("""INSERT INTO games (...) VALUES (...)""", (...))
 
         db.commit()
 
