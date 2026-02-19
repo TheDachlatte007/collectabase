@@ -7,10 +7,16 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
-      - ./uploads:/app/uploads
+      - collectabase_data:/app/data
+      - collectabase_uploads:/app/uploads
     environment:
       - DATABASE_URL=sqlite:///app/data/games.db
       - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
     restart: unless-stopped
+
+volumes:
+  collectabase_data:
+    external: true
+  collectabase_uploads:
+    external: true

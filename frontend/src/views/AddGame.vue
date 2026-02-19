@@ -144,15 +144,25 @@ const editId = ref(null)
 const game = ref({
   title: '',
   platform_id: '',
-  item_type: 'game', 
+  item_type: 'game',
   barcode: '',
   region: '',
   condition: '',
   completeness: '',
   purchase_price: null,
   current_value: null,
+  purchase_date: null,
   notes: '',
-  is_wishlist: false
+  is_wishlist: false,
+  igdb_id: null,
+  cover_url: null,
+  genre: null,
+  description: null,
+  developer: null,
+  publisher: null,
+  release_date: null,
+  location: null,
+  wishlist_max_price: null
 })
 
 async function loadPlatforms() {
@@ -173,20 +183,27 @@ async function loadGame(id) {
         region: data.region || '',
         condition: data.condition || '',
         completeness: data.completeness || '',
-        purchase_price: data.purchase_price || null,
-        current_value: data.current_value || null,
+        purchase_price: data.purchase_price ?? null,
+        current_value: data.current_value ?? null,
+        purchase_date: data.purchase_date || null,
         notes: data.notes || '',
         is_wishlist: data.is_wishlist || false,
         igdb_id: data.igdb_id || null,
         cover_url: data.cover_url || null,
         genre: data.genre || null,
         description: data.description || null,
+        developer: data.developer || null,
+        publisher: data.publisher || null,
+        release_date: data.release_date || null,
+        location: data.location || null,
+        wishlist_max_price: data.wishlist_max_price ?? null
       }
     }
   } catch (e) {
     console.error('Failed to load game:', e)
   }
 }
+
 
 async function searchIgdb() {
   if (!igdbSearch.value) return

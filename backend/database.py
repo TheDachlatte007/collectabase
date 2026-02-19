@@ -2,7 +2,8 @@ import sqlite3
 import os
 from contextlib import contextmanager
 
-DATABASE_PATH = os.getenv("DATABASE_URL", "sqlite:///app/data/games.db").replace("sqlite:///", "")
+_db_url = os.getenv("DATABASE_URL", "sqlite:///app/data/games.db")
+DATABASE_PATH = _db_url.replace("sqlite:///", "") if not _db_url.startswith("sqlite:////") else _db_url.replace("sqlite:////", "/")
 
 def init_db():
     """Initialize database with schema"""
