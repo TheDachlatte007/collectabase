@@ -54,8 +54,24 @@ def init_db():
             )
         """)
         
+        # Price history table
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL,
+                source TEXT DEFAULT 'pricecharting',
+                loose_price REAL,
+                complete_price REAL,
+                new_price REAL,
+                eur_rate REAL,
+                pricecharting_id TEXT,
+                fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+            )
+        """)
+
         db.commit()
-        
+
         # Insert default platforms
         default_platforms = [
             ("PlayStation 5", "Sony", "Console"),

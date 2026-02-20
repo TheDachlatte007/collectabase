@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <div v-if="loading" class="loading">Loading...</div>
-    
+
     <div v-else-if="!game" class="empty">
       <h3>Game not found</h3>
       <router-link to="/">Back to list</router-link>
@@ -28,6 +28,10 @@
             <button @click="enrichCover" class="btn btn-secondary" :disabled="enriching">
               {{ enriching ? '⏳ Fetching...' : '🖼 Enrich Cover' }}
             </button>
+            <button @click="checkPrice" class="btn btn-secondary" :disabled="priceLoading">
+              {{ priceLoading ? '⏳ Checking...' : '💰 Check Price' }}
+            </button>
+            <a :href="ebayUrl()" target="_blank" rel="noopener" class="btn btn-secondary">🛒 eBay.de</a>
             <button @click="deleteGame" class="btn btn-danger">Delete</button>
           </div>
         </div>
@@ -93,13 +97,37 @@
           <label>Description</label>
           <p>{{ game.description }}</p>
         </div>
+
+        <!-- Market Prices -->
+        <div class="price-section mt-3">
+          <label>Market Prices (PriceCharting)</label>
+          <div v-if="latestPrice" class="price-cells">
+            <div class="price-cell" :class="{ relevant: relevantKey() === 'loose' }">
+              <span class="p-label">Loose</span>
+              <span class="p-val">{{ latestPrice.loose_price != null ? '€' + latestPrice.loose_price.toFixed(2) : '—' }}</span>
+            </div>
+            <div class="price-cell" :class="{ relevant: relevantKey() === 'complete' }">
+              <span class="p-label">CIB</span>
+              <span class="p-val">{{ latestPrice.complete_price != null ? '€' + latestPrice.complete_price.toFixed(2) : '—' }}</span>
+            </div>
+            <div class="price-cell" :class="{ relevant: relevantKey() === 'new' }">
+              <span class="p-label">New</span>
+              <span class="p-val">{{ latestPrice.new_price != null ? '€' + latestPrice.new_price.toFixed(2) : '—' }}</span>
+            </div>
+          </div>
+          <p v-else class="text-muted" style="margin:0.5rem 0 0">No price data yet — click "Check Price" to fetch.</p>
+          <div v-if="latestPrice" class="price-meta">
+            Last checked: {{ formatDate(latestPrice.fetched_at) }}
+          </div>
+          <div v-if="priceError" class="price-error">{{ priceError }}</div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -107,6 +135,56 @@ const router = useRouter()
 const game = ref(null)
 const loading = ref(true)
 const enriching = ref(false)
+const priceLoading = ref(false)
+const priceHistory = ref([])
+const priceError = ref('')
+
+const latestPrice = computed(() => priceHistory.value[0] ?? null)
+
+function relevantKey() {
+  const c = (game.value?.completeness || '').toLowerCase()
+  if (c.includes('new') || c.includes('sealed')) return 'new'
+  if (c.includes('cib') || c.includes('complete') || c.includes('box')) return 'complete'
+  return 'loose'
+}
+
+function ebayUrl() {
+  const q = encodeURIComponent(`${game.value?.title || ''} ${game.value?.platform_name || ''}`)
+  return `https://www.ebay.de/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1`
+}
+
+function formatDate(dt) {
+  if (!dt) return ''
+  return new Date(dt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+async function checkPrice() {
+  priceLoading.value = true
+  priceError.value = ''
+  try {
+    const res = await fetch(`/api/games/${route.params.id}/price-check`, { method: 'POST' })
+    const data = await res.json()
+    if (data.error) {
+      priceError.value = data.error
+    } else {
+      await loadPriceHistory()
+    }
+  } catch (e) {
+    priceError.value = 'Price check failed'
+    console.error(e)
+  } finally {
+    priceLoading.value = false
+  }
+}
+
+async function loadPriceHistory() {
+  try {
+    const res = await fetch(`/api/games/${route.params.id}/price-history`)
+    if (res.ok) priceHistory.value = await res.json()
+  } catch (e) {
+    console.error('Failed to load price history:', e)
+  }
+}
 
 async function enrichCover() {
   enriching.value = true
@@ -119,7 +197,6 @@ async function enrichCover() {
     enriching.value = false
   }
 }
-
 
 function coverStyle(url) {
   return url ? { backgroundImage: `url(${url})` } : {}
@@ -140,7 +217,7 @@ async function loadGame() {
 
 async function deleteGame() {
   if (!confirm('Are you sure you want to delete this game?')) return
-  
+
   try {
     const res = await fetch(`/api/games/${route.params.id}`, { method: 'DELETE' })
     if (res.ok) {
@@ -151,7 +228,10 @@ async function deleteGame() {
   }
 }
 
-onMounted(loadGame)
+onMounted(async () => {
+  await loadGame()
+  await loadPriceHistory()
+})
 </script>
 
 <style scoped>
@@ -164,6 +244,21 @@ onMounted(loadGame)
 @media (max-width: 768px) {
   .detail-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 639px) {
+  /* Cap cover height so info section is visible without scrolling */
+  .cover-large {
+    max-height: 260px;
+    font-size: 4rem;
+  }
+
+  /* Title + actions: stack on very small screens */
+  .flex.flex-between.items-start {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
   }
 }
 
@@ -198,6 +293,8 @@ onMounted(loadGame)
 .actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .details-grid {
@@ -236,4 +333,57 @@ onMounted(loadGame)
 .profit { color: var(--success); font-weight: bold; }
 .loss { color: #ef4444; font-weight: bold; }
 
+/* Price section */
+.price-section {
+  background: var(--bg);
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+.price-section > label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.price-cells {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.price-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.p-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.p-val {
+  font-size: 1.4rem;
+  font-weight: bold;
+}
+
+.price-cell.relevant .p-val {
+  color: var(--success);
+}
+
+.price-meta {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.price-error {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #ef4444;
+}
 </style>

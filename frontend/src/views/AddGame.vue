@@ -6,9 +6,9 @@
       <!-- IGDB Search -->
       <div class="card mb-3">
         <h3>Search IGDB (optional)</h3>
-        <div class="flex gap-2 mb-2">
+        <div class="flex gap-2 mb-2 search-row">
           <input v-model="igdbSearch" placeholder="Search by title..." @keyup.enter="searchIgdb" />
-          <button @click="searchIgdb" class="btn btn-secondary" :disabled="igdbLoading">
+          <button @click="searchIgdb" class="btn btn-secondary" style="flex-shrink:0" :disabled="igdbLoading">
             {{ igdbLoading ? 'Searching...' : 'Search' }}
           </button>
         </div>
@@ -336,6 +336,10 @@ onMounted(async () => {
   margin-bottom: 0.5rem;
   cursor: pointer;
   transition: background 0.2s;
+  /* Touch-friendly: no flash, snappy tap */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
 }
 
 .igdb-item:hover {
@@ -353,5 +357,11 @@ onMounted(async () => {
   color: var(--text-muted);
   margin-top: 0.25rem;
   display: block;
+}
+
+/* Prevent search input overflowing and squeezing the button */
+.search-row input {
+  flex: 1;
+  min-width: 0;
 }
 </style>

@@ -219,8 +219,28 @@ onMounted(loadStats)
   gap: 1.5rem;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 639px) {
   .charts-row { grid-template-columns: 1fr; }
+
+  /* KPI cards: 2 per row on phones */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  .stat-value { font-size: 1.5rem; }
+
+  /* Tables: allow horizontal scroll instead of overflowing */
+  .stats-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  .stats-table th,
+  .stats-table td {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
 }
 
 .chart-card { padding: 1.5rem; }

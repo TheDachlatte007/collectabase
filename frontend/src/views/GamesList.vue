@@ -1,11 +1,11 @@
 <template>
   <div class="container">
-    <div class="flex flex-between items-center mb-3">
+    <div class="list-header mb-3">
       <h1>My Games</h1>
-      <div class="flex gap-2">
-        <input 
-          v-model="search" 
-          placeholder="Search games..." 
+      <div class="filters">
+        <input
+          v-model="search"
+          placeholder="Search games..."
           class="search-input"
         />
         <select v-model="selectedPlatform" class="filter-select">
@@ -101,10 +101,19 @@ async function loadData() {
       fetch('/api/games'),
       fetch('/api/platforms')
     ])
-    games.value = await gamesRes.json()
-    platforms.value = await platformsRes.json()
+    const [gamesData, platformsData] = await Promise.all([
+      gamesRes.json(),
+      platformsRes.json()
+    ])
+    games.value = Array.isArray(gamesData) ? gamesData : []
+    platforms.value = Array.isArray(platformsData) ? platformsData : []
   } catch (e) {
     console.error('Failed to load data:', e)
+    // Try to at least load platforms so the filter stays functional
+    try {
+      const platformsRes = await fetch('/api/platforms')
+      platforms.value = await platformsRes.json()
+    } catch {}
   } finally {
     loading.value = false
   }
@@ -114,9 +123,43 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+/* ── Filter bar ── */
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  flex: 1;
+  justify-content: flex-end;
+}
+
 .search-input, .filter-select {
   width: auto;
   min-width: 150px;
+}
+
+@media (max-width: 639px) {
+  .list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters {
+    flex-direction: column;
+    justify-content: stretch;
+  }
+
+  .search-input, .filter-select {
+    width: 100%;
+    min-width: unset;
+  }
 }
 
 .game-card {

@@ -24,6 +24,10 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
+  /* Prevent rubber-band overscroll revealing bg colour on mobile */
+  overscroll-behavior: contain;
+  /* Remove blue tap flash on all elements */
+  -webkit-tap-highlight-color: transparent;
 }
 
 #app {
@@ -80,6 +84,10 @@ nav a.router-link-active {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  /* Snappy tap response, no 300ms delay */
+  touch-action: manipulation;
+  /* Minimum touch target height */
+  min-height: 44px;
 }
 
 .btn-primary {
@@ -177,4 +185,36 @@ input:focus, select:focus, textarea:focus {
 .empty h3 {
   color: var(--text);
   margin-bottom: 0.5rem;
+}
+
+/* ─────────────────────────────────
+   Mobile responsive overrides
+   ───────────────────────────────── */
+@media (max-width: 639px) {
+  /* Tighter container on small screens */
+  .container {
+    padding: 1rem;
+  }
+
+  /* Two-column game grid on phones */
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+  }
+
+  /* Inputs already have font-size: 1rem which prevents iOS auto-zoom (< 16px zooms) */
+  /* Ensure selects don't zoom either */
+  select {
+    font-size: 1rem;
+  }
+
+  /* Full-width buttons on mobile */
+  .btn {
+    justify-content: center;
+  }
+
+  /* Cards slightly tighter padding */
+  .card {
+    padding: 1rem;
+  }
 }

@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from .clz_import import router as clz_router
+from .price_tracker import router as price_router
 import httpx
 import csv
 import io
@@ -17,6 +18,7 @@ load_dotenv()
 app = FastAPI(title="Collectabase", version="1.0.0")
 
 app.include_router(clz_router)
+app.include_router(price_router)
 
 # Get absolute path to frontend dist directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up one level to /app
@@ -575,24 +577,37 @@ async def import_csv(file: UploadFile = File(...)):
     """Import games from CSV file"""
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be a CSV")
-    
+
     content = await file.read()
-    decoded = content.decode('utf-8')
+    try:
+        decoded = content.decode('utf-8')
+    except UnicodeDecodeError:
+        decoded = content.decode('latin-1')
     reader = csv.DictReader(io.StringIO(decoded))
-    
+
+    def safe_float(val):
+        if not val or str(val).strip() == '':
+            return None
+        try:
+            return float(str(val).replace(',', '.').strip()) or None
+        except (ValueError, TypeError):
+            return None
+
     imported = 0
     errors = []
-    
+
     with get_db() as db:
-        for row in reader:
+        for row_num, row in enumerate(reader, start=2):
             try:
                 # Get or create platform
-                platform_name = row.get('Platform', row.get('platform', ''))
+                platform_name = row.get('Platform', row.get('platform', '')).strip()
+                if not platform_name:
+                    raise ValueError("Missing platform name")
                 platform_row = db.execute(
                     "SELECT id FROM platforms WHERE name = ?",
                     (platform_name,)
                 ).fetchone()
-                
+
                 if platform_row:
                     platform_id = platform_row[0]
                 else:
@@ -608,16 +623,19 @@ async def import_csv(file: UploadFile = File(...)):
                     platform_id = cursor.lastrowid
 
                 # Auto-detect item_type
-                title_lower = row.get('Title', row.get('title', '')).lower()
-                item_type = row.get('Type', row.get('item_type', '')).lower()
+                title_val = row.get('Title', row.get('title', '')).strip()
+                if not title_val:
+                    raise ValueError("Missing title")
+                item_type = row.get('Type', row.get('item_type', '')).lower().strip()
                 if not item_type:
+                    title_lower = title_val.lower()
                     if any(k in title_lower for k in ['gameboy', 'game boy', 'nintendo',
-                                                    'playstation', 'xbox', 'dreamcast',
-                                                    'console', 'system']):
+                                                      'playstation', 'xbox', 'dreamcast',
+                                                      'console', 'system']):
                         item_type = 'console'
                     else:
                         item_type = 'game'
-                
+
                 # Insert game
                 db.execute("""
                     INSERT INTO games (
@@ -626,25 +644,25 @@ async def import_csv(file: UploadFile = File(...)):
                         notes, is_wishlist
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    row.get('Title', row.get('title', 'Unknown')),
+                    title_val,
                     platform_id,
                     item_type,
-                    row.get('Barcode', row.get('barcode')),
-                    row.get('Region', row.get('region')),
-                    row.get('Condition', row.get('condition')),
-                    row.get('Completeness', row.get('completeness')),
-                    row.get('Location', row.get('location')),
-                    float(row.get('Purchase Price', row.get('purchase_price', 0))) or None,
-                    float(row.get('Value', row.get('current_value', 0))) or None,
-                    row.get('Notes', row.get('notes', '')),
-                    1 if row.get('Wishlist', row.get('is_wishlist', '')).lower() in ('yes', 'true', '1') else 0
+                    row.get('Barcode', row.get('barcode')) or None,
+                    row.get('Region', row.get('region')) or None,
+                    row.get('Condition', row.get('condition')) or None,
+                    row.get('Completeness', row.get('completeness')) or None,
+                    row.get('Location', row.get('location')) or None,
+                    safe_float(row.get('Purchase Price', row.get('purchase_price'))),
+                    safe_float(row.get('Value', row.get('current_value'))),
+                    row.get('Notes', row.get('notes', '')) or None,
+                    1 if str(row.get('Wishlist', row.get('is_wishlist', ''))).lower() in ('yes', 'true', '1') else 0
                 ))
                 imported += 1
             except Exception as e:
-                errors.append(f"Row {imported + len(errors) + 1}: {str(e)}")
-        
+                errors.append(f"Row {row_num}: {str(e)}")
+
         db.commit()
-    
+
     return {
         "imported": imported,
         "errors": errors if errors else None
@@ -744,10 +762,9 @@ async def catch_all(path: str):
 @app.delete("/api/database/clear")
 async def clear_database():
     with get_db() as db:
-            db.execute("DELETE FROM games")
-            db.execute("DELETE FROM platforms WHERE id > 1")
-            db.commit()
-            return {"message": "Database cleared successfully"}
+        db.execute("DELETE FROM games")
+        db.commit()
+        return {"message": "Database cleared successfully"}
 
 
 

@@ -1,28 +1,32 @@
 import csv
 import io
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from sqlalchemy.orm import Session
-from .database import SessionLocal, Game, Platform, get_db 
+from fastapi import APIRouter, UploadFile, File
+from .database import get_db
 
 router = APIRouter()
 
+
 def parse_price(price_str):
-    if not price_str: return None
+    if not price_str or str(price_str).strip() == '':
+        return None
     try:
-        return float(price_str.replace("€", "").replace(",", ".").strip())
-    except:
+        return float(str(price_str).replace("€", "").replace(",", ".").strip()) or None
+    except (ValueError, TypeError):
         return None
 
+
 def parse_date(date_str):
-    if not date_str: return None
+    if not date_str or str(date_str).strip() == '':
+        return None
     formats = ["%b %d, %Y", "%Y-%m-%d", "%d.%m.%Y", "%m/%d/%Y", "%Y"]
     for fmt in formats:
         try:
             return datetime.strptime(date_str.strip(), fmt).strftime("%Y-%m-%d")
-        except:
+        except ValueError:
             continue
     return None
+
 
 def normalize_item_type(type_str):
     ts = type_str.lower().strip() if type_str else ""
@@ -30,98 +34,106 @@ def normalize_item_type(type_str):
         return ts
     return "game"
 
+
 @router.post("/api/import/clz")
 async def import_clz(file: UploadFile = File(...)):
     content = await file.read()
     try:
         text = content.decode("utf-8")
-    except:
+    except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    db: Session = next(get_db())
-    try:
-        # Plattformen laden für Name→ID Mapping
-        platforms = db.query(Platform).all()
-        platform_map = {p.name.lower(): p.id for p in platforms}
+    imported = 0
+    skipped = 0
+    errors = []
+
+    with get_db() as db:
+        # Load existing platforms for name → ID mapping
+        platform_rows = db.execute("SELECT id, name FROM platforms").fetchall()
+        platform_map = {row["name"].lower(): row["id"] for row in platform_rows}
 
         def match_platform(name):
-            if not name: return None
-            nl = name.lower()
+            if not name:
+                return None
+            nl = name.lower().strip()
+            if nl in platform_map:
+                return platform_map[nl]
             for key, pid in platform_map.items():
                 if nl in key or key in nl:
                     return pid
             return None
 
         reader = csv.DictReader(io.StringIO(text))
-        imported = 0
-        skipped = 0
-        errors = []
 
         for i, row in enumerate(reader, start=2):
-            # Zeilen die mit # beginnen überspringen
-            if list(row.values())[0].startswith("#"):
+            # Skip comment lines
+            first_val = list(row.values())[0] if row else ""
+            if first_val and str(first_val).startswith("#"):
                 continue
 
-            title = row.get("title") or row.get("Title", "").strip()
+            title = (row.get("title") or row.get("Title", "")).strip()
             if not title:
                 skipped += 1
                 continue
 
-            platform_name = row.get("platform_id") or row.get("Platform", "")
+            platform_name = (row.get("platform_id") or row.get("Platform", "")).strip()
             pid = match_platform(platform_name)
 
-            # Plattform anlegen wenn nicht vorhanden
+            # Create platform if not found
             if not pid and platform_name:
-                new_platform = Platform(name=platform_name.strip())
-                db.add(new_platform)
-                db.flush()
-                pid = new_platform.id
-                platform_map[platform_name.lower()] = pid
+                try:
+                    cursor = db.execute(
+                        "INSERT OR IGNORE INTO platforms (name) VALUES (?)",
+                        (platform_name,)
+                    )
+                    pid = cursor.lastrowid
+                    if not pid:
+                        found = db.execute(
+                            "SELECT id FROM platforms WHERE name = ?", (platform_name,)
+                        ).fetchone()
+                        pid = found["id"] if found else None
+                    if pid:
+                        platform_map[platform_name.lower()] = pid
+                except Exception as e:
+                    errors.append(f"Line {i}: Could not create platform '{platform_name}': {e}")
 
             try:
-                game = Game(
-                    title=title,
-                    platform_id=pid,
-                    item_type=normalize_item_type(row.get("item_type") or row.get("Type", "")),
-                    barcode=row.get("barcode") or row.get("Barcode") or None,
-                    region=row.get("region") or row.get("Region") or None,
-                    condition=row.get("condition") or row.get("Condition") or None,
-                    completeness=row.get("completeness") or row.get("Completeness") or None,
-                    purchase_price=parse_price(row.get("purchase_price") or row.get("Purchase Price")),
-                    current_value=parse_price(row.get("current_value") or row.get("Value")),
-                    purchase_date=parse_date(row.get("purchase_date") or row.get("Purchase Date")),
-                    notes=row.get("notes") or row.get("Notes") or None,
-                    is_wishlist=str(row.get("is_wishlist", "0")).lower() in ["1", "true", "yes", "wishlist"],
-                    genre=row.get("genre") or row.get("Genre") or None,
-                    description=row.get("description") or row.get("Description") or None,
-                    developer=row.get("developer") or row.get("Developer") or None,
-                    publisher=row.get("publisher") or row.get("Publisher") or None,
-                    release_date=parse_date(row.get("release_date") or row.get("Release Date")),
-                    location=row.get("location") or row.get("Location") or None,
-                )
-                db.add(game)
+                db.execute("""
+                    INSERT INTO games (
+                        title, platform_id, item_type, barcode, region, condition,
+                        completeness, purchase_price, current_value, purchase_date,
+                        notes, genre, description, developer, publisher, release_date,
+                        location, is_wishlist
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    title,
+                    pid,
+                    normalize_item_type(row.get("item_type") or row.get("Type", "")),
+                    row.get("barcode") or row.get("Barcode") or None,
+                    row.get("region") or row.get("Region") or None,
+                    row.get("condition") or row.get("Condition") or None,
+                    row.get("completeness") or row.get("Completeness") or None,
+                    parse_price(row.get("purchase_price") or row.get("Purchase Price")),
+                    parse_price(row.get("current_value") or row.get("Value")),
+                    parse_date(row.get("purchase_date") or row.get("Purchase Date")),
+                    row.get("notes") or row.get("Notes") or None,
+                    row.get("genre") or row.get("Genre") or None,
+                    row.get("description") or row.get("Description") or None,
+                    row.get("developer") or row.get("Developer") or None,
+                    row.get("publisher") or row.get("Publisher") or None,
+                    parse_date(row.get("release_date") or row.get("Release Date")),
+                    row.get("location") or row.get("Location") or None,
+                    1 if str(row.get("is_wishlist", "0")).lower() in ["1", "true", "yes", "wishlist"] else 0,
+                ))
                 imported += 1
             except Exception as e:
-                errors.append(f"Zeile {i}: {title} → {str(e)}")
+                errors.append(f"Line {i}: {title} → {e}")
                 skipped += 1
-
-                db.execute("""INSERT INTO games (...) VALUES (...)""", (...))
 
         db.commit()
 
-        # Auto-enrich games without cover
-        games_without_cover = db.query(Game).filter(Game.cover_url.is_(None)).all()
-        for game in games_without_cover:
-            # IGDB lookup hier einfügen (gleicher Code wie im Enrich Button)
-            pass
-
-        return {
-            "imported": imported,
-            "skipped": skipped,
-            "errors": errors[:20]  # Max 20 Fehler zurückgeben
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+    return {
+        "imported": imported,
+        "skipped": skipped,
+        "errors": errors[:20]
+    }

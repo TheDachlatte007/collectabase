@@ -39,7 +39,7 @@
     <div class="card mb-3">
       <h3 class="mb-2">🖼 Cover Enrichment</h3>
       <p class="text-muted mb-2">Automatically fetch covers for all items without one from IGDB and GameTDB.</p>
-      <div class="flex gap-2 items-center mb-2">
+      <div class="flex gap-2 items-center mb-2 limit-row">
         <label class="text-muted">Limit per run:</label>
         <input v-model.number="enrichLimit" type="number" min="1" max="500" class="limit-input" />
       </div>
@@ -51,11 +51,27 @@
       </div>
     </div>
 
+    <!-- Price Tracking -->
+    <div class="card mb-3">
+      <h3 class="mb-2">💰 Price Tracking</h3>
+      <p class="text-muted mb-2">Fetch current market prices from PriceCharting (USD → EUR) for all games.</p>
+      <div class="flex gap-2 items-center mb-2 limit-row">
+        <label class="text-muted">Limit per run:</label>
+        <input v-model.number="priceLimit" type="number" min="1" max="500" class="limit-input" />
+      </div>
+      <button @click="runBulkPriceUpdate" class="btn btn-primary" :disabled="priceUpdating">
+        {{ priceUpdating ? `⏳ Updating... (${priceProgress.done}/${priceProgress.total})` : '💰 Run Bulk Price Update' }}
+      </button>
+      <div v-if="priceUpdateDone" class="result-box mt-2">
+        ✅ Done: {{ priceProgress.success }} updated, {{ priceProgress.failed }} not found out of {{ priceProgress.total }} games
+      </div>
+    </div>
+
     <!-- CLZ Import -->
     <div class="card mb-3">
     <h3>CLZ / Collectorz Import</h3>
     <p class="text-muted">Importiert CLZ Game Collector CSV Export direkt.</p>
-    <div class="flex gap-2 items-center">
+    <div class="flex gap-2 items-center import-row">
         <input type="file" accept=".csv" @change="onClzFile" ref="clzInput" />
         <button class="btn btn-primary" @click="importClz" :disabled="!clzFile || clzLoading">
         {{ clzLoading ? 'Importiere...' : 'CLZ Import' }}
@@ -117,6 +133,10 @@ const clzLoading = ref(false)
 const clzResult = ref(null)
 const clearLoading = ref(false)
 const clearResult = ref(null)
+const priceUpdating = ref(false)
+const priceUpdateDone = ref(false)
+const priceLimit = ref(100)
+const priceProgress = ref({ success: 0, failed: 0, total: 0, done: 0 })
 
 function onClzFile(e) {
   clzFile.value = e.target.files[0]
@@ -165,6 +185,24 @@ async function runBulkEnrich() {
     console.error('Bulk enrich failed:', e)
   } finally {
     enriching.value = false
+  }
+}
+
+async function runBulkPriceUpdate() {
+  priceUpdating.value = true
+  priceUpdateDone.value = false
+  priceProgress.value = { success: 0, failed: 0, total: 0, done: 0 }
+  try {
+    const res = await fetch(`/api/prices/update-all?limit=${priceLimit.value}`, { method: 'POST' })
+    if (res.ok) {
+      const data = await res.json()
+      priceProgress.value = { ...data, done: data.total }
+      priceUpdateDone.value = true
+    }
+  } catch (e) {
+    console.error('Bulk price update failed:', e)
+  } finally {
+    priceUpdating.value = false
   }
 }
 
@@ -250,5 +288,27 @@ onMounted(loadInfo)
 
 .danger-card {
   border: 1px solid #ef444440;
+}
+
+@media (max-width: 639px) {
+  /* 2-column info grid on phones */
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Stack label + input for the limit row */
+  .limit-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .limit-input {
+    width: 100%;
+  }
+
+  /* Stack file input + button for the CLZ import row */
+  .import-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>
