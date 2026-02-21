@@ -15,6 +15,57 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Stable Wikimedia Commons image URLs for known consoles/handhelds.
+# Used as cover fallback when item_type == 'console' and no cover was found via IGDB/GameTDB.
+CONSOLE_IMAGE_MAP = {
+    # Nintendo home consoles
+    "nes": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/NES-Console-Set.jpg/320px-NES-Console-Set.jpg",
+    "nintendo entertainment system": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/NES-Console-Set.jpg/320px-NES-Console-Set.jpg",
+    "snes": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/SNES-Mod1-Console-Set.jpg/320px-SNES-Mod1-Console-Set.jpg",
+    "super nintendo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/SNES-Mod1-Console-Set.jpg/320px-SNES-Mod1-Console-Set.jpg",
+    "super nintendo entertainment system": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/SNES-Mod1-Console-Set.jpg/320px-SNES-Mod1-Console-Set.jpg",
+    "nintendo 64": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Nintendo-64-wController-L.jpg/320px-Nintendo-64-wController-L.jpg",
+    "n64": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Nintendo-64-wController-L.jpg/320px-Nintendo-64-wController-L.jpg",
+    "gamecube": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/GameCube-Console-Set.jpg/320px-GameCube-Console-Set.jpg",
+    "nintendo gamecube": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/GameCube-Console-Set.jpg/320px-GameCube-Console-Set.jpg",
+    "wii": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Wii-Console.jpg/240px-Wii-Console.jpg",
+    "wii u": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Wii_U_Console_and_Gamepad.png/320px-Wii_U_Console_and_Gamepad.png",
+    "nintendo switch": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Nintendo-Switch-wJoyCons-L-R-LR.jpg/320px-Nintendo-Switch-wJoyCons-L-R-LR.jpg",
+    "nintendo switch 2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Nintendo-Switch-wJoyCons-L-R-LR.jpg/320px-Nintendo-Switch-wJoyCons-L-R-LR.jpg",
+    # Nintendo handhelds
+    "game boy": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Nintendo_Gameboy.jpg/200px-Nintendo_Gameboy.jpg",
+    "game boy color": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Nintendo-Game-Boy-Color-FL.jpg/220px-Nintendo-Game-Boy-Color-FL.jpg",
+    "game boy advance": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Nintendo-Game-Boy-Advance-FL.jpg/250px-Nintendo-Game-Boy-Advance-FL.jpg",
+    "nintendo ds": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Nintendo-DS-Lite-Black-Open.jpg/250px-Nintendo-DS-Lite-Black-Open.jpg",
+    "nintendo 3ds": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Nintendo-3DS-AquaOpen.jpg/250px-Nintendo-3DS-AquaOpen.jpg",
+    # PlayStation home consoles
+    "playstation": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/PlayStation-SCPH-1000-with-Controller.jpg/320px-PlayStation-SCPH-1000-with-Controller.jpg",
+    "playstation 2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/PlayStation_2-Set.jpg/320px-PlayStation_2-Set.jpg",
+    "playstation 3": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/PlayStation_3.png/320px-PlayStation_3.png",
+    "playstation 4": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/PlayStation_4_and_DualShock_4.jpg/320px-PlayStation_4_and_DualShock_4.jpg",
+    "playstation 5": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/PlayStation_5_and_DualSense.jpg/320px-PlayStation_5_and_DualSense.jpg",
+    # PlayStation handhelds
+    "psp": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/PSP-1000.jpg/320px-PSP-1000.jpg",
+    "ps vita": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/PS-Vita-1101-FL.jpg/320px-PS-Vita-1101-FL.jpg",
+    # Xbox consoles
+    "xbox": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Xbox-Console-Set.jpg/320px-Xbox-Console-Set.jpg",
+    "xbox 360": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Xbox-360-S-Console.jpg/320px-Xbox-360-S-Console.jpg",
+    "xbox one": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/XBox-One.jpg/320px-XBox-One.jpg",
+    "xbox series x/s": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Xbox_Series_X_%26_S.jpg/320px-Xbox_Series_X_%26_S.jpg",
+    # Sega consoles
+    "sega master system": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Sega-Master-System-Set.jpg/320px-Sega-Master-System-Set.jpg",
+    "sega genesis/mega drive": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Sega-Genesis-Mod1-Bare.jpg/320px-Sega-Genesis-Mod1-Bare.jpg",
+    "sega saturn": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Sega-Saturn-JP-Mk1-Console-Set.jpg/320px-Sega-Saturn-JP-Mk1-Console-Set.jpg",
+    "sega dreamcast": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Dreamcast-Console-Set.jpg/320px-Dreamcast-Console-Set.jpg",
+    "sega game gear": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Game-Gear-Handheld.jpg/280px-Game-Gear-Handheld.jpg",
+}
+
+def get_console_image(platform_name: str) -> Optional[str]:
+    """Return a Wikimedia image URL for a known console, or None."""
+    if not platform_name:
+        return None
+    return CONSOLE_IMAGE_MAP.get(platform_name.strip().lower())
+
 app = FastAPI(title="Collectabase", version="1.0.0")
 
 app.include_router(clz_router)
@@ -421,7 +472,11 @@ async def lookup_combined(search: IGDBSearch):
 @app.post("/api/games/{game_id}/enrich")
 async def enrich_game_cover(game_id: int):
     with get_db() as db:
-        row = db.execute("SELECT * FROM games WHERE id = ?", (game_id,)).fetchone()
+        row = db.execute("""
+            SELECT g.*, p.name as platform_name
+            FROM games g LEFT JOIN platforms p ON g.platform_id = p.id
+            WHERE g.id = ?
+        """, (game_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Game not found")
         game = dict_from_row(row)
@@ -444,6 +499,9 @@ async def enrich_game_cover(game_id: int):
         except:
             pass
 
+    if not cover_url and game.get("item_type") == "console":
+        cover_url = get_console_image(game.get("platform_name") or game.get("title", ""))
+
     if not cover_url:
         raise HTTPException(status_code=404, detail="No cover found")
 
@@ -458,10 +516,12 @@ async def enrich_game_cover(game_id: int):
 async def enrich_all_covers(limit: int = 20):
     """Bulk enrich covers for all items without a cover_url"""
     with get_db() as db:
-        rows = db.execute(
-            "SELECT * FROM games WHERE (cover_url IS NULL OR cover_url = '') AND is_wishlist = 0 LIMIT ?",
-            (limit,)
-        ).fetchall()
+        rows = db.execute("""
+            SELECT g.*, p.name as platform_name
+            FROM games g LEFT JOIN platforms p ON g.platform_id = p.id
+            WHERE (g.cover_url IS NULL OR g.cover_url = '') AND g.is_wishlist = 0
+            LIMIT ?
+        """, (limit,)).fetchall()
         items = [dict_from_row(row) for row in rows]
 
     results = {"success": 0, "failed": 0, "total": len(items)}
@@ -484,6 +544,9 @@ async def enrich_all_covers(limit: int = 20):
                     cover_url = gametdb_results[0]["cover_url"]
             except:
                 pass
+
+        if not cover_url and item.get("item_type") == "console":
+            cover_url = get_console_image(item.get("platform_name") or item.get("title", ""))
 
         if cover_url:
             with get_db() as db:

@@ -120,6 +120,14 @@
             Last checked: {{ formatDate(latestPrice.fetched_at) }}
           </div>
           <div v-if="priceError" class="price-error">{{ priceError }}</div>
+
+          <!-- Price History Chart -->
+          <div v-if="priceHistory.length >= 2" class="price-chart-wrapper mt-3">
+            <canvas ref="priceChartEl"></canvas>
+          </div>
+          <p v-else-if="priceHistory.length === 1" class="text-muted price-chart-hint">
+            Check price at least twice to see history chart
+          </p>
         </div>
       </div>
     </div>
@@ -127,8 +135,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import {
+  Chart,
+  LineController,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Legend,
+  Tooltip
+} from 'chart.js'
+
+Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Legend, Tooltip)
 
 const route = useRoute()
 const router = useRouter()
@@ -138,8 +158,97 @@ const enriching = ref(false)
 const priceLoading = ref(false)
 const priceHistory = ref([])
 const priceError = ref('')
+const priceChartEl = ref(null)
+let chartInstance = null
 
 const latestPrice = computed(() => priceHistory.value[0] ?? null)
+
+function formatChartDate(dt) {
+  if (!dt) return ''
+  const d = new Date(dt)
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${dd}.${mm}.${yy}`
+}
+
+function buildChart() {
+  if (!priceChartEl.value) return
+  if (chartInstance) {
+    chartInstance.destroy()
+    chartInstance = null
+  }
+
+  // priceHistory is ordered newest-first; reverse for chronological order on chart
+  const ordered = [...priceHistory.value].reverse()
+  const labels = ordered.map(r => formatChartDate(r.fetched_at))
+
+  chartInstance = new Chart(priceChartEl.value, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Loose',
+          data: ordered.map(r => r.loose_price),
+          borderColor: '#60a5fa',
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          pointRadius: 4,
+          spanGaps: true
+        },
+        {
+          label: 'CIB',
+          data: ordered.map(r => r.complete_price),
+          borderColor: '#34d399',
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          pointRadius: 4,
+          spanGaps: true
+        },
+        {
+          label: 'New',
+          data: ordered.map(r => r.new_price),
+          borderColor: '#fb923c',
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          pointRadius: 4,
+          spanGaps: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        x: { title: { display: false } },
+        y: {
+          title: { display: true, text: 'EUR' },
+          beginAtZero: false
+        }
+      }
+    }
+  })
+}
+
+watch(
+  () => priceHistory.value,
+  async (newVal) => {
+    if (newVal.length >= 2) {
+      await nextTick()
+      buildChart()
+    } else {
+      if (chartInstance) {
+        chartInstance.destroy()
+        chartInstance = null
+      }
+    }
+  },
+  { deep: true }
+)
 
 function relevantKey() {
   const c = (game.value?.completeness || '').toLowerCase()
@@ -385,5 +494,14 @@ onMounted(async () => {
   margin-top: 0.5rem;
   font-size: 0.85rem;
   color: #ef4444;
+}
+
+.price-chart-wrapper {
+  margin-top: 1rem;
+}
+
+.price-chart-hint {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
 }
 </style>

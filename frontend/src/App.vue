@@ -136,7 +136,7 @@ main {
   border-top: 1px solid var(--border);
   z-index: 100;
   /* Safe area for iPhone home indicator */
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 .mobile-nav a {
@@ -149,7 +149,7 @@ main {
   text-decoration: none;
   font-size: 0.6rem;
   gap: 0.2rem;
-  padding: 0.4rem 0.25rem;
+  padding: 12px 0.25rem 0.4rem;
   /* Ensure 44px minimum touch target */
   min-height: 44px;
   transition: color 0.15s;
