@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import Optional
 import httpx
 import asyncio
 from .database import get_db, dict_from_row
@@ -185,3 +187,27 @@ async def bulk_price_update(limit: int = 100):
         await asyncio.sleep(0.4)  # stay polite to PriceCharting
 
     return {"success": success, "failed": failed, "total": len(games)}
+
+
+class ManualPriceEntry(BaseModel):
+    loose_price: Optional[float] = None
+    complete_price: Optional[float] = None
+    new_price: Optional[float] = None
+
+
+@router.post("/api/games/{game_id}/price-manual")
+async def add_manual_price(game_id: int, entry: ManualPriceEntry):
+    """Save a manually entered price snapshot (source='manual')."""
+    with get_db() as db:
+        row = db.execute("SELECT id FROM games WHERE id = ?", (game_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    with get_db() as db:
+        db.execute("""
+            INSERT INTO price_history
+                (game_id, source, loose_price, complete_price, new_price)
+            VALUES (?, 'manual', ?, ?, ?)
+        """, (game_id, entry.loose_price, entry.complete_price, entry.new_price))
+        db.commit()
+    return {"ok": True}

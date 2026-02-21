@@ -26,7 +26,10 @@
 
       <div v-if="result" class="result mt-2">
         <p v-if="result.imported > 0" class="text-success">
-          ✅ Imported {{ result.imported }} games
+          ✅ Imported {{ result.imported }} game{{ result.imported === 1 ? '' : 's' }}
+        </p>
+        <p v-if="result.skipped_duplicates > 0" class="text-muted">
+          ⏩ {{ result.skipped_duplicates }} duplicate{{ result.skipped_duplicates === 1 ? '' : 's' }} skipped
         </p>
         <div v-if="result.errors?.length" class="error-block">
           <p class="text-error">⚠️ {{ result.errors.length }} row(s) failed:</p>

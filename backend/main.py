@@ -78,10 +78,41 @@ FRONTEND_DIR = os.path.join(BASE_DIR, "frontend", "dist")
 # Serve frontend assets
 app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
 
+# Serve uploaded covers
+UPLOADS_DIR = os.getenv("UPLOADS_DIR", "/app/uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
     init_db()
+
+@app.post("/api/upload/cover")
+async def upload_cover(file: UploadFile = File(...)):
+    """Upload a cover image and return its URL."""
+    import uuid, mimetypes
+    MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+
+    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    content_type = file.content_type or ""
+    if content_type not in allowed:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP and GIF images are allowed.")
+
+    data = await file.read()
+    if len(data) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="File exceeds 5 MB limit.")
+
+    ext = mimetypes.guess_extension(content_type) or ".jpg"
+    if ext == ".jpe":
+        ext = ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(UPLOADS_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(data)
+
+    return {"url": f"/uploads/{filename}"}
+
 
 # Pydantic Models
 class IGDBSearch(BaseModel):
@@ -155,8 +186,19 @@ async def list_games(
         return games
 
 @app.post("/api/games")
-async def create_game(game: GameCreate):
+async def create_game(game: GameCreate, force: bool = False):
     """Create a new game"""
+    if not force:
+        with get_db() as db:
+            existing = db.execute(
+                "SELECT id FROM games WHERE LOWER(title) = LOWER(?) AND platform_id = ?",
+                (game.title, game.platform_id)
+            ).fetchone()
+            if existing:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"message": "Game already exists", "existing_id": existing[0]}
+                )
     with get_db() as db:
         cursor = db.execute("""
             INSERT INTO games (
@@ -657,6 +699,7 @@ async def import_csv(file: UploadFile = File(...)):
             return None
 
     imported = 0
+    skipped_duplicates = 0
     errors = []
 
     with get_db() as db:
@@ -699,6 +742,15 @@ async def import_csv(file: UploadFile = File(...)):
                     else:
                         item_type = 'game'
 
+                # Skip duplicates (same title + platform)
+                dup = db.execute(
+                    "SELECT id FROM games WHERE LOWER(title) = LOWER(?) AND platform_id = ?",
+                    (title_val, platform_id)
+                ).fetchone()
+                if dup:
+                    skipped_duplicates += 1
+                    continue
+
                 # Insert game
                 db.execute("""
                     INSERT INTO games (
@@ -728,6 +780,7 @@ async def import_csv(file: UploadFile = File(...)):
 
     return {
         "imported": imported,
+        "skipped_duplicates": skipped_duplicates,
         "errors": errors if errors else None
     }
 

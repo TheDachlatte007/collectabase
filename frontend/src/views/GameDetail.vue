@@ -11,9 +11,24 @@
       <div class="card cover-card">
         <div class="cover-large" :style="coverStyle(game.cover_url)">
           <span v-if="!game.cover_url">🎮</span>
+          <button v-if="game.cover_url" @click="removeCover" class="cover-remove-btn" title="Remove cover">✕</button>
         </div>
         <div v-if="game.current_value" class="value-badge">
           €{{ game.current_value }}
+        </div>
+        <div class="cover-upload-row">
+          <input
+            ref="coverFileInput"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style="display:none"
+            @change="onCoverFileSelected"
+          />
+          <button class="btn btn-secondary cover-upload-btn" @click="coverFileInput.click()" :disabled="coverUploading">
+            {{ coverUploading ? '⏳ Uploading...' : '📷 Upload Photo' }}
+          </button>
+          <span v-if="coverUploadError" class="cover-upload-error">{{ coverUploadError }}</span>
         </div>
       </div>
 
@@ -69,6 +84,10 @@
             <label>Location</label>
             <span>{{ game.location }}</span>
           </div>
+          <div v-if="game.release_date" class="detail-item">
+            <label>Release Date</label>
+            <span>{{ game.release_date }}</span>
+          </div>
           <div v-if="game.genre" class="detail-item">
             <label>Genre</label>
             <span>{{ game.genre }}</span>
@@ -80,6 +99,10 @@
           <div v-if="game.publisher" class="detail-item">
             <label>Publisher</label>
             <span>{{ game.publisher }}</span>
+          </div>
+          <div v-if="game.is_wishlist && game.wishlist_max_price" class="detail-item">
+            <label>Max Wishlist Price</label>
+            <span>€{{ game.wishlist_max_price }}</span>
           </div>
           <div v-if="game.current_value && game.purchase_price" class="detail-item">
             <label>Profit/Loss</label>
@@ -115,9 +138,10 @@
               <span class="p-val">{{ latestPrice.new_price != null ? '€' + latestPrice.new_price.toFixed(2) : '—' }}</span>
             </div>
           </div>
-          <p v-else class="text-muted" style="margin:0.5rem 0 0">No price data yet — click "Check Price" to fetch.</p>
+          <p v-else class="text-muted" style="margin:0.5rem 0 0">Add a price entry to start tracking.</p>
           <div v-if="latestPrice" class="price-meta">
             Last checked: {{ formatDate(latestPrice.fetched_at) }}
+            <span :class="`source-pill source-${latestPrice.source}`">{{ latestPrice.source }}</span>
           </div>
           <div v-if="priceError" class="price-error">{{ priceError }}</div>
 
@@ -126,8 +150,30 @@
             <canvas ref="priceChartEl"></canvas>
           </div>
           <p v-else-if="priceHistory.length === 1" class="text-muted price-chart-hint">
-            Check price at least twice to see history chart
+            Add one more entry to see the history chart.
           </p>
+
+          <!-- Manual Entry -->
+          <div class="manual-entry mt-3">
+            <div class="manual-entry-label">Add Manual Entry</div>
+            <div class="manual-entry-fields">
+              <div class="manual-field">
+                <span class="p-label">Loose (€)</span>
+                <input v-model.number="manualEntry.loose_price" type="number" step="0.01" placeholder="—" />
+              </div>
+              <div class="manual-field">
+                <span class="p-label">CIB (€)</span>
+                <input v-model.number="manualEntry.complete_price" type="number" step="0.01" placeholder="—" />
+              </div>
+              <div class="manual-field">
+                <span class="p-label">New (€)</span>
+                <input v-model.number="manualEntry.new_price" type="number" step="0.01" placeholder="—" />
+              </div>
+              <button class="btn btn-secondary" @click="addManualEntry" :disabled="manualSaving">
+                {{ manualSaving ? 'Saving...' : '+ Add Entry' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -159,13 +205,20 @@ const priceLoading = ref(false)
 const priceHistory = ref([])
 const priceError = ref('')
 const priceChartEl = ref(null)
+const coverFileInput = ref(null)
+const coverUploading = ref(false)
+const coverUploadError = ref('')
+const manualEntry = ref({ loose_price: null, complete_price: null, new_price: null })
+const manualSaving = ref(false)
 let chartInstance = null
 
 const latestPrice = computed(() => priceHistory.value[0] ?? null)
 
 function formatChartDate(dt) {
   if (!dt) return ''
-  const d = new Date(dt)
+  // SQLite CURRENT_TIMESTAMP is "YYYY-MM-DD HH:MM:SS" — replace space with T for valid ISO 8601
+  const d = new Date(typeof dt === 'string' ? dt.replace(' ', 'T') : dt)
+  if (isNaN(d.getTime())) return String(dt)
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const yy = String(d.getFullYear()).slice(-2)
@@ -221,7 +274,19 @@ function buildChart() {
       responsive: true,
       plugins: {
         legend: { position: 'top' },
-        tooltip: { mode: 'index', intersect: false }
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            footer(items) {
+              const idx = items[0]?.dataIndex
+              if (idx == null) return []
+              const src = ordered[idx]?.source || ''
+              const labels = { pricecharting: '📊 PriceCharting', manual: '✏️ Manual', ebay: '🛒 eBay' }
+              return [labels[src] || src]
+            }
+          }
+        }
       },
       scales: {
         x: { title: { display: false } },
@@ -264,7 +329,9 @@ function ebayUrl() {
 
 function formatDate(dt) {
   if (!dt) return ''
-  return new Date(dt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const d = new Date(typeof dt === 'string' ? dt.replace(' ', 'T') : dt)
+  if (isNaN(d.getTime())) return String(dt)
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 async function checkPrice() {
@@ -337,6 +404,70 @@ async function deleteGame() {
   }
 }
 
+async function saveCoverUrl(url) {
+  await fetch(`/api/games/${route.params.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...game.value, cover_url: url })
+  })
+  game.value.cover_url = url
+}
+
+async function onCoverFileSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  coverUploadError.value = ''
+  if (file.size > 5 * 1024 * 1024) {
+    coverUploadError.value = 'File exceeds 5 MB limit.'
+    event.target.value = ''
+    return
+  }
+  coverUploading.value = true
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch('/api/upload/cover', { method: 'POST', body: form })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      coverUploadError.value = err.detail || 'Upload failed.'
+      return
+    }
+    const { url } = await res.json()
+    await saveCoverUrl(url)
+  } catch (e) {
+    coverUploadError.value = 'Upload failed.'
+    console.error(e)
+  } finally {
+    coverUploading.value = false
+    event.target.value = ''
+  }
+}
+
+async function removeCover() {
+  await saveCoverUrl('')
+}
+
+async function addManualEntry() {
+  const { loose_price, complete_price, new_price } = manualEntry.value
+  if (loose_price == null && complete_price == null && new_price == null) return
+  manualSaving.value = true
+  try {
+    const res = await fetch(`/api/games/${route.params.id}/price-manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loose_price, complete_price, new_price })
+    })
+    if (res.ok) {
+      manualEntry.value = { loose_price: null, complete_price: null, new_price: null }
+      await loadPriceHistory()
+    }
+  } catch (e) {
+    console.error('Failed to save manual entry:', e)
+  } finally {
+    manualSaving.value = false
+  }
+}
+
 onMounted(async () => {
   await loadGame()
   await loadPriceHistory()
@@ -385,6 +516,41 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   font-size: 6rem;
+  position: relative;
+}
+
+.cover-remove-btn {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.cover-upload-row {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cover-upload-btn {
+  width: 100%;
+}
+
+.cover-upload-error {
+  font-size: 0.8rem;
+  color: #ef4444;
 }
 
 .value-badge {
@@ -503,5 +669,49 @@ onMounted(async () => {
 .price-chart-hint {
   margin-top: 0.75rem;
   font-size: 0.8rem;
+}
+
+.source-pill {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+.source-pill.source-pricecharting { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.source-pill.source-manual        { background: rgba(52,211,153,0.15);  color: #34d399; }
+.source-pill.source-ebay          { background: rgba(251,146,60,0.15);  color: #fb923c; }
+
+.manual-entry {
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+  padding-top: 0.75rem;
+}
+
+.manual-entry-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.manual-entry-fields {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.manual-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.manual-field input {
+  width: 90px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
 }
 </style>

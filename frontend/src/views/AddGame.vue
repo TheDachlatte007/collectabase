@@ -55,7 +55,12 @@
 
           <div class="form-group">
             <label>Barcode</label>
-            <input v-model="game.barcode" />
+            <div class="barcode-row">
+              <input v-model="game.barcode" />
+              <button type="button" class="btn btn-secondary barcode-btn" @click="openScanner" title="Scan barcode">
+                📷
+              </button>
+            </div>
           </div>
 
           <div class="form-group">
@@ -94,6 +99,21 @@
           </div>
 
           <div class="form-group">
+            <label>Release Date</label>
+            <input v-model="game.release_date" type="date" />
+          </div>
+
+          <div class="form-group">
+            <label>Location</label>
+            <input v-model="game.location" placeholder="e.g. Shelf A, Box 3" />
+          </div>
+
+          <div class="form-group">
+            <label>Purchase Date</label>
+            <input v-model="game.purchase_date" type="date" />
+          </div>
+
+          <div class="form-group">
             <label>Purchase Price (€)</label>
             <input v-model.number="game.purchase_price" type="number" step="0.01" />
           </div>
@@ -101,6 +121,50 @@
           <div class="form-group">
             <label>Current Value (€)</label>
             <input v-model.number="game.current_value" type="number" step="0.01" />
+          </div>
+
+          <div class="form-group">
+            <label>Genre</label>
+            <input v-model="game.genre" placeholder="e.g. RPG, Platformer" />
+          </div>
+
+          <div class="form-group">
+            <label>Developer</label>
+            <input v-model="game.developer" />
+          </div>
+
+          <div class="form-group">
+            <label>Publisher</label>
+            <input v-model="game.publisher" />
+          </div>
+
+          <div class="form-group full-width">
+            <label>Cover Photo</label>
+            <div class="cover-preview-row">
+              <div v-if="game.cover_url" class="cover-thumb-wrap">
+                <img :src="game.cover_url" class="cover-thumb" />
+                <button type="button" class="cover-thumb-remove" @click="game.cover_url = ''" title="Remove cover">✕</button>
+              </div>
+              <div class="cover-upload-actions">
+                <input
+                  ref="coverFileInput"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style="display:none"
+                  @change="onCoverFileSelected"
+                />
+                <button type="button" class="btn btn-secondary" @click="coverFileInput.click()" :disabled="coverUploading">
+                  {{ coverUploading ? '⏳ Uploading...' : '📷 Upload Photo' }}
+                </button>
+                <span v-if="coverUploadError" class="cover-upload-error">{{ coverUploadError }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group full-width">
+            <label>Description</label>
+            <textarea v-model="game.description" rows="3"></textarea>
           </div>
 
           <div class="form-group full-width">
@@ -114,6 +178,19 @@
               Add to Wishlist
             </label>
           </div>
+
+          <div v-if="game.is_wishlist" class="form-group">
+            <label>Max Wishlist Price (€)</label>
+            <input v-model.number="game.wishlist_max_price" type="number" step="0.01" />
+          </div>
+        </div>
+
+        <div v-if="duplicateWarning" class="duplicate-warning mt-3">
+          <span>⚠️ This game already exists in your collection.</span>
+          <div class="flex gap-2 mt-2">
+            <router-link v-if="duplicateWarning.existing_id" :to="`/game/${duplicateWarning.existing_id}`" class="btn btn-secondary">View existing</router-link>
+            <button type="button" class="btn btn-secondary" @click="saveAnyway" :disabled="saving">Save anyway</button>
+          </div>
         </div>
 
         <div class="flex gap-2 mt-3">
@@ -124,11 +201,27 @@
         </div>
       </form>
     </div>
+
+    <!-- Barcode Scanner Modal -->
+    <div v-if="scannerOpen" class="scanner-overlay" @click.self="closeScanner">
+      <div class="scanner-modal">
+        <div class="scanner-header">
+          <span>Scan Barcode</span>
+          <button type="button" class="scanner-close" @click="closeScanner">✕</button>
+        </div>
+        <div class="scanner-body">
+          <video ref="scannerVideo" class="scanner-video" autoplay playsinline muted></video>
+          <div class="scanner-reticle"></div>
+          <p v-if="scannerError" class="scanner-error">{{ scannerError }}</p>
+          <p v-else class="scanner-hint">Point camera at barcode</p>
+        </div>
       </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted,nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
@@ -140,6 +233,15 @@ const igdbResults = ref([])
 const igdbLoading = ref(false)
 const isEditMode = ref(false)
 const editId = ref(null)
+const coverFileInput = ref(null)
+const coverUploading = ref(false)
+const coverUploadError = ref('')
+const duplicateWarning = ref(null)  // { existing_id } when 409
+const saveForced = ref(false)
+const scannerOpen = ref(false)
+const scannerError = ref('')
+const scannerVideo = ref(null)
+let cameraStream = null
 
 const game = ref({
   title: '',
@@ -227,9 +329,55 @@ async function searchIgdb() {
 }
 
 function fillFromIgdb(result) {
-  // Gemeinsame Felder
+  const incomingCover = result.source === 'gametdb'
+    ? (result.cover_front || result.cover_url)
+    : result.cover_url
+
+  // Determine which fields would be overwritten
+  const overwrites = []
+  if (game.value.title && result.title && game.value.title !== result.title)
+    overwrites.push('Title')
+  if (game.value.cover_url && incomingCover && game.value.cover_url !== incomingCover)
+    overwrites.push('Cover')
+  if (game.value.platform_id) {
+    // Check if a platform match exists and differs
+    let matchId = null
+    if (result.source === 'igdb' && result.platforms?.length > 0) {
+      const match = platforms.value.find(p =>
+        result.platforms.some(rp =>
+          rp.toLowerCase().includes(p.name.toLowerCase()) ||
+          p.name.toLowerCase().includes(rp.toLowerCase())
+        )
+      )
+      matchId = match?.id ?? null
+    } else if (result.source === 'gametdb') {
+      const platformMap = { 'wii': 'Wii', 'wiiu': 'Wii U', 'gc': 'GameCube', 'ds': 'Nintendo DS', '3ds': 'Nintendo 3DS', 'ps3': 'PlayStation 3', '360': 'Xbox 360' }
+      const platformName = platformMap[result.platform]
+      if (platformName) {
+        const match = platforms.value.find(p => p.name.toLowerCase().includes(platformName.toLowerCase()))
+        matchId = match?.id ?? null
+      }
+    }
+    if (matchId && matchId !== game.value.platform_id) overwrites.push('Platform')
+  }
+  if (result.source === 'igdb') {
+    if (game.value.release_date && result.release_date) overwrites.push('Year')
+  }
+
+  if (overwrites.length > 0) {
+    const ok = window.confirm(
+      `Apply IGDB data?\n\nThis will overwrite: ${overwrites.join(', ')}\n\nClick OK to apply or Cancel to keep your data.`
+    )
+    if (!ok) {
+      igdbResults.value = []
+      igdbSearch.value = ''
+      return
+    }
+  }
+
+  // Apply common fields
   game.value.title = result.title
-  game.value.cover_url = result.cover_url
+  game.value.cover_url = incomingCover
 
   if (result.source === 'igdb') {
     game.value.igdb_id = result.igdb_id
@@ -238,11 +386,10 @@ function fillFromIgdb(result) {
     game.value.release_date = result.release_date
     game.value.developer = result.developer || null
     game.value.publisher = result.publisher || null
-    // Platform auto-match: suche passende Platform in der Liste
     if (result.platforms?.length > 0) {
-      const match = platforms.value.find(p => 
-        result.platforms.some(rp => 
-          rp.toLowerCase().includes(p.name.toLowerCase()) || 
+      const match = platforms.value.find(p =>
+        result.platforms.some(rp =>
+          rp.toLowerCase().includes(p.name.toLowerCase()) ||
           p.name.toLowerCase().includes(rp.toLowerCase())
         )
       )
@@ -252,23 +399,10 @@ function fillFromIgdb(result) {
 
   if (result.source === 'gametdb') {
     game.value.gametdb_id = result.gametdb_id
-    // GameTDB Cover: bevorzuge coverfull über cover
-    game.value.cover_url = result.cover_front || result.cover_url
-    // Platform auto-match über GameTDB platform code
-    const platformMap = {
-      'wii': 'Wii',
-      'wiiu': 'Wii U',
-      'gc': 'GameCube',
-      'ds': 'Nintendo DS',
-      '3ds': 'Nintendo 3DS',
-      'ps3': 'PlayStation 3',
-      '360': 'Xbox 360',
-    }
+    const platformMap = { 'wii': 'Wii', 'wiiu': 'Wii U', 'gc': 'GameCube', 'ds': 'Nintendo DS', '3ds': 'Nintendo 3DS', 'ps3': 'PlayStation 3', '360': 'Xbox 360' }
     const platformName = platformMap[result.platform]
     if (platformName) {
-      const match = platforms.value.find(p => 
-        p.name.toLowerCase().includes(platformName.toLowerCase())
-      )
+      const match = platforms.value.find(p => p.name.toLowerCase().includes(platformName.toLowerCase()))
       if (match) game.value.platform_id = match.id
     }
   }
@@ -277,17 +411,55 @@ function fillFromIgdb(result) {
   igdbSearch.value = ''
 }
 
+async function onCoverFileSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  coverUploadError.value = ''
+  if (file.size > 5 * 1024 * 1024) {
+    coverUploadError.value = 'File exceeds 5 MB limit.'
+    event.target.value = ''
+    return
+  }
+  coverUploading.value = true
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch('/api/upload/cover', { method: 'POST', body: form })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      coverUploadError.value = err.detail || 'Upload failed.'
+      return
+    }
+    const { url } = await res.json()
+    game.value.cover_url = url
+  } catch (e) {
+    coverUploadError.value = 'Upload failed.'
+    console.error(e)
+  } finally {
+    coverUploading.value = false
+    event.target.value = ''
+  }
+}
+
 async function saveGame() {
   saving.value = true
+  duplicateWarning.value = null
   try {
-    const url = isEditMode.value ? `/api/games/${editId.value}` : '/api/games'
+    let url = isEditMode.value ? `/api/games/${editId.value}` : '/api/games'
+    if (saveForced.value) url += '?force=true'
     const method = isEditMode.value ? 'PUT' : 'POST'
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(game.value)
     })
+    if (res.status === 409) {
+      const data = await res.json()
+      duplicateWarning.value = { existing_id: data.existing_id }
+      return
+    }
     if (res.ok) {
+      saveForced.value = false
       router.push(isEditMode.value ? `/game/${editId.value}` : '/')
     }
   } catch (e) {
@@ -297,6 +469,60 @@ async function saveGame() {
   }
 }
 
+function saveAnyway() {
+  saveForced.value = true
+  saveGame()
+}
+
+function openScanner() {
+  scannerOpen.value = true
+  scannerError.value = ''
+  nextTick(() => startCamera())
+}
+
+function closeScanner() {
+  scannerOpen.value = false
+  stopCamera()
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop())
+    cameraStream = null
+  }
+}
+
+async function startCamera() {
+  try {
+    if (!('BarcodeDetector' in window)) {
+      scannerError.value = 'Barcode scanning not supported on this browser'
+      return
+    }
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    scannerVideo.value.srcObject = cameraStream
+    const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8'] })
+    const scan = async () => {
+      if (!scannerOpen.value) return
+      try {
+        const codes = await detector.detect(scannerVideo.value)
+        if (codes.length > 0) {
+          game.value.barcode = codes[0].rawValue
+          igdbSearch.value = codes[0].rawValue
+          await searchIgdb()
+          closeScanner()
+          return
+        }
+      } catch {}
+      requestAnimationFrame(scan)
+    }
+    scannerVideo.value.onloadedmetadata = () => scan()
+  } catch {
+    scannerError.value = 'Camera access denied. Please allow camera access.'
+  }
+}
+
+
+
 onMounted(async () => {
   await loadPlatforms()
   if (route.params.id) {
@@ -305,12 +531,25 @@ onMounted(async () => {
     await loadGame(route.params.id)
   }
 })
+
+onUnmounted(() => {
+  stopCamera()
+})
+
 </script>
 
 
 <style scoped>
 .form-layout {
   max-width: 800px;
+}
+
+.duplicate-warning {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
 }
 
 .form-grid {
@@ -363,5 +602,55 @@ onMounted(async () => {
 .search-row input {
   flex: 1;
   min-width: 0;
+}
+
+.cover-preview-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cover-thumb-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cover-thumb {
+  width: 80px;
+  height: 107px;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  display: block;
+}
+
+.cover-thumb-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 0.65rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.cover-upload-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.cover-upload-error {
+  font-size: 0.8rem;
+  color: #ef4444;
 }
 </style>

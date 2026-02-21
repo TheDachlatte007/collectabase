@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(where:*)",
+      "Bash(cmd.exe /c \"where npm 2>&1\")",
+      "Bash(cmd.exe /c \"node --version 2>&1\")",
+      "Bash(cmd.exe /c \"where npm\")",
+      "Bash(powershell.exe -Command \"Get-Command npm | Select-Object -ExpandProperty Source\")"
+    ]
+  }
+}
