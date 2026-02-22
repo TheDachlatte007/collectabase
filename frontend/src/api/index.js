@@ -29,7 +29,7 @@ export const statsApi = {
 }
 
 export const priceApi = {
-  check: (id) => apiPost(`/api/games/${id}/price-check`),
+  check: (id) => apiPost(`/api/games/${id}/fetch-market-price`),
   history: (id) => apiGet(`/api/games/${id}/price-history`),
   manual: (id, payload) => apiPost(`/api/games/${id}/price-manual`, payload),
   bulk: (limit) => apiPost(`/api/prices/update-all?limit=${limit}`)
@@ -40,4 +40,11 @@ export const settingsApi = {
   clearCovers: () => apiPost('/api/settings/clear-covers'),
   clearDatabase: () => apiDelete('/api/database/clear'),
   bulkEnrich: (limit) => apiPost(`/api/enrich/all?limit=${limit}`)
+}
+
+export const priceCatalogApi = {
+  search: (params = '') => apiGet(`/api/price-catalog${params}`),
+  platforms: () => apiGet('/api/price-catalog/platforms'),
+  scrape: (platform = 'all') => apiPost(`/api/price-catalog/scrape?platform=${encodeURIComponent(platform)}`),
+  clear: (platform = null) => apiDelete(`/api/price-catalog${platform ? `?platform=${encodeURIComponent(platform)}` : ''}`)
 }

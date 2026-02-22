@@ -44,9 +44,11 @@
               {{ enriching ? '⏳ Fetching...' : '🖼 Enrich Cover' }}
             </button>
             <button @click="checkPrice" class="btn btn-secondary" :disabled="priceLoading">
-              {{ priceLoading ? '⏳ Checking...' : '💰 Check Price' }}
+              {{ priceLoading ? '⏳ Fetching...' : '💰 Fetch Market Price' }}
             </button>
-            <a :href="ebayUrl()" target="_blank" rel="noopener" class="btn btn-secondary">🛒 eBay.de</a>
+            <a :href="ebayUrl()" target="_blank" rel="noopener" class="btn btn-secondary">🛒 eBay Sold</a>
+            <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="btn btn-secondary">📈 PriceCharting</a>
+            <a :href="rawgUrl()" target="_blank" rel="noopener" class="btn btn-secondary">🎮 RAWG</a>
             <button @click="deleteGame" class="btn btn-danger">Delete</button>
           </div>
         </div>
@@ -123,7 +125,7 @@
 
         <!-- Market Prices -->
         <div class="price-section mt-3">
-          <label>Market Prices (PriceCharting)</label>
+          <label>Market Prices</label>
           <div v-if="latestPrice" class="price-cells">
             <div class="price-cell" :class="{ relevant: relevantKey() === 'loose' }">
               <span class="p-label">Loose</span>
@@ -143,7 +145,50 @@
             Last checked: {{ formatDate(latestPrice.fetched_at) }}
             <span :class="`source-pill source-${latestPrice.source}`">{{ latestPrice.source }}</span>
           </div>
-          <div v-if="priceError" class="price-error">{{ priceError }}</div>
+          <div v-if="priceError && !showMarketConfigWarning" class="price-error">{{ priceError }}</div>
+          <div class="start-value-row">
+            <span class="text-muted">
+              Start value:
+              <strong>{{ startValue != null ? '€' + formatMoney(startValue) : '—' }}</strong>
+            </span>
+            <button class="btn btn-secondary btn-sm" @click="editStartValue">Update Start Value</button>
+          </div>
+          <div v-if="marketSuggestion" class="market-suggestion">
+            <div v-if="marketSuggestion.source === 'pricecharting'" class="market-suggestion-text">
+              📊 €{{ formatMoney(marketSuggestion.market_price) }} (PriceCharting - Loose)
+            </div>
+            <div v-else-if="marketSuggestion.source === 'ebay'" class="market-suggestion-text">
+              🛒 ~€{{ formatMoney(marketSuggestion.market_price) }}
+              (Median of {{ marketSuggestion.sample_size }} eBay listings, €{{ formatMoney(marketSuggestion.price_min) }}-€{{ formatMoney(marketSuggestion.price_max) }})
+            </div>
+            <div class="market-suggestion-actions">
+              <button class="btn btn-secondary" @click="setMarketSuggestionAsCurrentValue" :disabled="settingSuggestedValue">
+                {{ settingSuggestedValue ? 'Saving...' : 'Set as current value' }}
+              </button>
+              <button class="btn btn-secondary" @click="dismissMarketSuggestion">Dismiss</button>
+            </div>
+          </div>
+          <div v-if="showMarketConfigWarning" class="price-warning">
+            ⚠️ Configure PRICECHARTING_TOKEN or EBAY_CLIENT_ID to enable market prices
+          </div>
+          <div v-if="rawgReference" class="rawg-reference">
+            <div class="rawg-title">RAWG reference links:</div>
+            <a v-if="rawgReference.rawg_url" :href="rawgReference.rawg_url" target="_blank" rel="noopener" class="rawg-link">
+              Open RAWG game page
+            </a>
+            <div v-if="rawgReference.store_links?.length" class="rawg-stores">
+              <a
+                v-for="(store, idx) in rawgReference.store_links"
+                :key="`${store.url}-${idx}`"
+                :href="store.url"
+                target="_blank"
+                rel="noopener"
+                class="rawg-link"
+              >
+                {{ store.name || 'Store' }}
+              </a>
+            </div>
+          </div>
 
           <!-- Price History Chart -->
           <div v-if="priceHistory.length >= 2" class="price-chart-wrapper mt-3">
@@ -206,15 +251,20 @@ const enriching = ref(false)
 const priceLoading = ref(false)
 const priceHistory = ref([])
 const priceError = ref('')
+const marketSuggestion = ref(null)
+const rawgReference = ref(null)
+const settingSuggestedValue = ref(false)
 const priceChartEl = ref(null)
 const coverFileInput = ref(null)
 const coverUploading = ref(false)
 const coverUploadError = ref('')
 const manualEntry = ref({ loose_price: null, complete_price: null, new_price: null })
 const manualSaving = ref(false)
+const startValue = ref(null)
 let chartInstance = null
 
 const latestPrice = computed(() => priceHistory.value[0] ?? null)
+const showMarketConfigWarning = computed(() => priceError.value === 'CONFIG_NOT_SET')
 
 function formatChartDate(dt) {
   if (!dt) return ''
@@ -237,40 +287,52 @@ function buildChart() {
   // priceHistory is ordered newest-first; reverse for chronological order on chart
   const ordered = [...priceHistory.value].reverse()
   const labels = ordered.map(r => formatChartDate(r.fetched_at))
+  const datasets = [
+    {
+      label: 'Loose',
+      data: ordered.map(r => r.loose_price),
+      borderColor: '#60a5fa',
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: 4,
+      spanGaps: true
+    },
+    {
+      label: 'CIB',
+      data: ordered.map(r => r.complete_price),
+      borderColor: '#34d399',
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: 4,
+      spanGaps: true
+    },
+    {
+      label: 'New',
+      data: ordered.map(r => r.new_price),
+      borderColor: '#fb923c',
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: 4,
+      spanGaps: true
+    }
+  ]
+  if (startValue.value != null && Number.isFinite(Number(startValue.value))) {
+    datasets.push({
+      label: 'Start Value',
+      data: labels.map(() => Number(startValue.value)),
+      borderColor: '#facc15',
+      backgroundColor: 'transparent',
+      borderDash: [6, 4],
+      tension: 0,
+      pointRadius: 0
+    })
+  }
 
   chartInstance = new Chart(priceChartEl.value, {
     type: 'line',
     data: {
       labels,
-      datasets: [
-        {
-          label: 'Loose',
-          data: ordered.map(r => r.loose_price),
-          borderColor: '#60a5fa',
-          backgroundColor: 'transparent',
-          tension: 0.3,
-          pointRadius: 4,
-          spanGaps: true
-        },
-        {
-          label: 'CIB',
-          data: ordered.map(r => r.complete_price),
-          borderColor: '#34d399',
-          backgroundColor: 'transparent',
-          tension: 0.3,
-          pointRadius: 4,
-          spanGaps: true
-        },
-        {
-          label: 'New',
-          data: ordered.map(r => r.new_price),
-          borderColor: '#fb923c',
-          backgroundColor: 'transparent',
-          tension: 0.3,
-          pointRadius: 4,
-          spanGaps: true
-        }
-      ]
+      datasets
     },
     options: {
       responsive: true,
@@ -329,6 +391,16 @@ function ebayUrl() {
   return `https://www.ebay.de/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1`
 }
 
+function priceChartingUrl() {
+  const q = encodeURIComponent(`${game.value?.title || ''} ${game.value?.platform_name || ''}`.trim())
+  return `https://www.pricecharting.com/search-products?type=prices&q=${q}`
+}
+
+function rawgUrl() {
+  const q = encodeURIComponent(`${game.value?.title || ''} ${game.value?.platform_name || ''}`.trim())
+  return `https://rawg.io/search?query=${q}`
+}
+
 function formatDate(dt) {
   if (!dt) return ''
   const d = new Date(typeof dt === 'string' ? dt.replace(' ', 'T') : dt)
@@ -336,15 +408,35 @@ function formatDate(dt) {
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+function formatMoney(value) {
+  const num = Number(value)
+  return Number.isFinite(num) ? num.toFixed(2) : '0.00'
+}
+
 async function checkPrice() {
   priceLoading.value = true
   priceError.value = ''
+  marketSuggestion.value = null
+  rawgReference.value = null
   try {
     const res = await priceApi.check(route.params.id)
     const data = res.data || {}
+    if (!res.ok) {
+      priceError.value = data?.detail?.message || data?.detail || data?.error || 'Price check failed'
+      notifyError(priceError.value)
+      return
+    }
     if (data.error) {
-      priceError.value = data.error
+      if (String(data.error).includes('Configure PRICECHARTING_TOKEN or EBAY_CLIENT_ID')) {
+        priceError.value = 'CONFIG_NOT_SET'
+      } else if (data.source === 'rawg') {
+        priceError.value = data.error
+        rawgReference.value = data
+      } else {
+        priceError.value = data.error
+      }
     } else {
+      marketSuggestion.value = data
       await loadPriceHistory()
     }
   } catch (e) {
@@ -353,6 +445,67 @@ async function checkPrice() {
     notifyError('Price check failed.')
   } finally {
     priceLoading.value = false
+  }
+}
+
+async function setMarketSuggestionAsCurrentValue() {
+  if (!marketSuggestion.value || !game.value) return
+  const marketPrice = Number(marketSuggestion.value.market_price)
+  if (!Number.isFinite(marketPrice)) return
+
+  settingSuggestedValue.value = true
+  try {
+    const res = await gamesApi.update(route.params.id, { ...game.value, current_value: marketPrice })
+    if (res.ok) {
+      game.value.current_value = marketPrice
+      startValue.value = marketPrice
+      marketSuggestion.value = null
+      notifySuccess('Current value updated.')
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to set current value.')
+    }
+  } catch (e) {
+    console.error('Failed setting current value:', e)
+    notifyError('Failed to set current value.')
+  } finally {
+    settingSuggestedValue.value = false
+  }
+}
+
+function dismissMarketSuggestion() {
+  marketSuggestion.value = null
+}
+
+async function editStartValue() {
+  if (!game.value) return
+  const current = startValue.value != null ? String(startValue.value) : ''
+  const raw = window.prompt('Enter start value (EUR)', current)
+  if (raw == null) return
+
+  const parsed = Number(raw.replace(',', '.'))
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    notifyError('Please enter a valid number.')
+    return
+  }
+
+  try {
+    const res = await gamesApi.update(route.params.id, { ...game.value, current_value: parsed })
+    if (!res.ok) {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to update start value.')
+      return
+    }
+    game.value.current_value = parsed
+    startValue.value = parsed
+    notifySuccess('Start value updated.')
+    if (priceHistory.value.length >= 2) {
+      await nextTick()
+      buildChart()
+    }
+  } catch (e) {
+    console.error('Failed updating start value:', e)
+    notifyError('Failed to update start value.')
   }
 }
 
@@ -394,6 +547,10 @@ async function loadGame() {
     const res = await gamesApi.get(route.params.id)
     if (res.ok) {
       game.value = res.data
+      if (startValue.value == null) {
+        const v = Number(game.value.current_value)
+        startValue.value = Number.isFinite(v) ? v : null
+      }
     }
   } catch (e) {
     console.error('Failed to load game:', e)
@@ -686,6 +843,65 @@ onMounted(async () => {
   margin-top: 0.5rem;
   font-size: 0.85rem;
   color: #ef4444;
+}
+
+.price-warning {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #f59e0b;
+}
+
+.market-suggestion {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.market-suggestion-text {
+  font-size: 0.9rem;
+}
+
+.market-suggestion-actions {
+  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.start-value-row {
+  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rawg-reference {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.rawg-title {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.rawg-stores {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.rawg-link {
+  color: #93c5fd;
+  text-decoration: underline;
+  font-size: 0.85rem;
 }
 
 .price-chart-wrapper {

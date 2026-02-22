@@ -17,6 +17,24 @@
           </span>
         </div>
         <div class="info-item">
+          <label>PriceCharting</label>
+          <span :class="info.pricecharting_configured ? 'status-ok' : 'status-warn'">
+            {{ info.pricecharting_configured ? '✅ configured' : '⚠️ PRICECHARTING_TOKEN not set' }}
+          </span>
+        </div>
+        <div class="info-item">
+          <label>eBay Market Prices</label>
+          <span :class="info.ebay_configured ? 'status-ok' : 'status-warn'">
+            {{ info.ebay_configured ? '✅ configured' : '⚠️ EBAY_CLIENT_ID not set' }}
+          </span>
+        </div>
+        <div class="info-item">
+          <label>RAWG</label>
+          <span :class="info.rawg_configured ? 'status-ok' : 'status-warn'">
+            {{ info.rawg_configured ? '✅ configured' : '⚠️ RAWG_API_KEY not set' }}
+          </span>
+        </div>
+        <div class="info-item">
           <label>Total Items</label>
           <span>{{ info.total_items ?? '—' }}</span>
         </div>
@@ -309,6 +327,7 @@ onMounted(loadInfo)
 
 .status-ok { color: var(--success); font-weight: bold; }
 .status-error { color: #ef4444; font-weight: bold; }
+.status-warn { color: #f59e0b; font-weight: bold; }
 
 .limit-input {
   width: 80px;
