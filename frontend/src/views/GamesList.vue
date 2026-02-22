@@ -54,6 +54,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { gamesApi, platformsApi } from '../api'
 
 const games = ref([])
 const platforms = ref([])
@@ -98,21 +99,19 @@ function coverEmoji(type) {
 async function loadData() {
   try {
     const [gamesRes, platformsRes] = await Promise.all([
-      fetch('/api/games'),
-      fetch('/api/platforms')
+      gamesApi.list(),
+      platformsApi.list()
     ])
-    const [gamesData, platformsData] = await Promise.all([
-      gamesRes.json(),
-      platformsRes.json()
-    ])
+    const gamesData = gamesRes.data
+    const platformsData = platformsRes.data
     games.value = Array.isArray(gamesData) ? gamesData : []
     platforms.value = Array.isArray(platformsData) ? platformsData : []
   } catch (e) {
     console.error('Failed to load data:', e)
     // Try to at least load platforms so the filter stays functional
     try {
-      const platformsRes = await fetch('/api/platforms')
-      platforms.value = await platformsRes.json()
+      const platformsRes = await platformsApi.list()
+      platforms.value = platformsRes.data || []
     } catch {}
   } finally {
     loading.value = false

@@ -120,6 +120,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { importApi, priceApi, settingsApi } from '../api'
+import { notifyError, notifySuccess } from '../composables/useNotifications'
 
 const info = ref({})
 const enriching = ref(false)
@@ -149,13 +151,17 @@ async function importClz() {
   const formData = new FormData()
   formData.append('file', clzFile.value)
   try {
-    const res = await fetch('/api/import/clz', {
-      method: 'POST',
-      body: formData
-    })
-    clzResult.value = await res.json()
+    const res = await importApi.clz(formData)
+    clzResult.value = res.data
+    if (res.ok) {
+      notifySuccess(`CLZ import finished (${clzResult.value?.imported ?? 0} imported).`)
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || clzResult.value?.error || 'CLZ import failed.')
+    }
   } catch (e) {
     clzResult.value = { imported: 0, skipped: 0, errors: ['Import fehlgeschlagen'] }
+    notifyError('CLZ import failed.')
   } finally {
     clzLoading.value = false
   }
@@ -163,10 +169,15 @@ async function importClz() {
 
 async function loadInfo() {
   try {
-    const res = await fetch('/api/settings/info')
-    if (res.ok) info.value = await res.json()
+    const res = await settingsApi.info()
+    if (res.ok) info.value = res.data
+    else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to load settings.')
+    }
   } catch (e) {
     console.error('Failed to load settings:', e)
+    notifyError('Failed to load settings.')
   }
 }
 
@@ -175,14 +186,19 @@ async function runBulkEnrich() {
   enrichDone.value = false
   enrichProgress.value = { success: 0, failed: 0, total: 0 }
   try {
-    const res = await fetch(`/api/enrich/all?limit=${enrichLimit.value}`, { method: 'POST' })
+    const res = await settingsApi.bulkEnrich(enrichLimit.value)
     if (res.ok) {
-      enrichProgress.value = await res.json()
+      enrichProgress.value = res.data
       enrichDone.value = true
+      notifySuccess(`Bulk enrich finished (${res.data?.success ?? 0} success).`)
       await loadInfo() // refresh missing covers count
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Bulk enrich failed.')
     }
   } catch (e) {
     console.error('Bulk enrich failed:', e)
+    notifyError('Bulk enrich failed.')
   } finally {
     enriching.value = false
   }
@@ -193,21 +209,35 @@ async function runBulkPriceUpdate() {
   priceUpdateDone.value = false
   priceProgress.value = { success: 0, failed: 0, total: 0, done: 0 }
   try {
-    const res = await fetch(`/api/prices/update-all?limit=${priceLimit.value}`, { method: 'POST' })
+    const res = await priceApi.bulk(priceLimit.value)
     if (res.ok) {
-      const data = await res.json()
+      const data = res.data
       priceProgress.value = { ...data, done: data.total }
       priceUpdateDone.value = true
+      notifySuccess(`Bulk price update finished (${data?.success ?? 0} updated).`)
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Bulk price update failed.')
     }
   } catch (e) {
     console.error('Bulk price update failed:', e)
+    notifyError('Bulk price update failed.')
   } finally {
     priceUpdating.value = false
   }
 }
 
 async function exportCSV() {
-  window.open('/api/export/csv', '_blank')
+  try {
+    const res = await importApi.exportCsv()
+    if (res.ok) notifySuccess(`Export downloaded (${res.data?.filename || 'collectabase_export.csv'}).`)
+    else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Export failed.')
+    }
+  } catch (e) {
+    notifyError('Export failed.')
+  }
 }
 
 async function clearCovers() {
@@ -215,13 +245,18 @@ async function clearCovers() {
   clearing.value = true
   clearDone.value = false
   try {
-    const res = await fetch('/api/settings/clear-covers', { method: 'POST' })
+    const res = await settingsApi.clearCovers()
     if (res.ok) {
       clearDone.value = true
+      notifySuccess('All covers cleared.')
       await loadInfo()
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to clear covers.')
     }
   } catch (e) {
     console.error('Clear covers failed:', e)
+    notifyError('Failed to clear covers.')
   } finally {
     clearing.value = false
   }
@@ -232,12 +267,18 @@ async function clearDatabase() {
   
   clearLoading.value = true
   try {
-    const res = await fetch('/api/database/clear', { method: 'DELETE' })
-    clearResult.value = await res.json()
+    const res = await settingsApi.clearDatabase()
+    clearResult.value = res.data
+    if (res.ok) notifySuccess('Database cleared.')
+    else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to clear database.')
+    }
     // Refresh Games List nach Clear
     location.reload()
   } catch (e) {
     clearResult.value = { message: 'Fehler: ' + e.message }
+    notifyError('Failed to clear database.')
   } finally {
     clearLoading.value = false
   }

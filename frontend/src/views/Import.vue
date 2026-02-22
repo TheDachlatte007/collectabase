@@ -93,6 +93,8 @@
 
 <script setup>
 import { ref } from 'vue'
+import { importApi } from '../api'
+import { notifyError, notifySuccess } from '../composables/useNotifications'
 
 const file = ref(null)
 const importing = ref(false)
@@ -120,14 +122,18 @@ async function importFile() {
   formData.append('file', file.value)
 
   try {
-    const res = await fetch('/api/import/csv', {
-      method: 'POST',
-      body: formData
-    })
-    result.value = await res.json()
+    const res = await importApi.csv(formData)
+    result.value = res.data
+    if (!res.ok) {
+      const detail = result.value?.detail
+      notifyError(detail?.message || detail || result.value?.error || 'CSV import failed.')
+    } else {
+      notifySuccess(`CSV import finished (${result.value?.imported ?? 0} imported).`)
+    }
   } catch (e) {
     console.error('Import failed:', e)
     result.value = { error: 'Import failed' }
+    notifyError('CSV import failed.')
   } finally {
     importing.value = false
   }
@@ -141,14 +147,18 @@ async function importClzFile() {
   formData.append('file', clzFile.value)
 
   try {
-    const res = await fetch('/api/import/clz', {
-      method: 'POST',
-      body: formData
-    })
-    clzResult.value = await res.json()
+    const res = await importApi.clz(formData)
+    clzResult.value = res.data
+    if (!res.ok) {
+      const detail = clzResult.value?.detail
+      notifyError(detail?.message || detail || clzResult.value?.error || 'CLZ import failed.')
+    } else {
+      notifySuccess(`CLZ import finished (${clzResult.value?.imported ?? 0} imported).`)
+    }
   } catch (e) {
     console.error('CLZ import failed:', e)
     clzResult.value = { error: 'Import failed' }
+    notifyError('CLZ import failed.')
   } finally {
     clzImporting.value = false
   }
@@ -156,18 +166,15 @@ async function importClzFile() {
 
 async function exportCsv() {
   try {
-    const res = await fetch('/api/export/csv')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'collectabase_export.csv'
-    a.click()
-
-    URL.revokeObjectURL(url)
+    const res = await importApi.exportCsv()
+    if (res.ok) notifySuccess(`Export downloaded (${res.data?.filename || 'collectabase_export.csv'}).`)
+    else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Export failed.')
+    }
   } catch (e) {
     console.error('Export failed:', e)
+    notifyError('Export failed.')
   }
 }
 </script>

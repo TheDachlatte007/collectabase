@@ -99,6 +99,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { statsApi } from '../api'
 import { Doughnut, Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -190,8 +191,8 @@ function capitalize(str) {
 
 async function loadStats() {
   try {
-    const res = await fetch('/api/stats')
-    stats.value = await res.json()
+    const res = await statsApi.get()
+    stats.value = res.data || stats.value
   } catch (e) {
     console.error('Failed to load stats:', e)
   } finally {

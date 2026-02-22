@@ -223,6 +223,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted,nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { gamesApi, lookupApi, platformsApi } from '../api'
+import { notifyError, notifySuccess } from '../composables/useNotifications'
 
 const router = useRouter()
 const route = useRoute()
@@ -268,15 +270,16 @@ const game = ref({
 })
 
 async function loadPlatforms() {
-  const res = await fetch('/api/platforms')
-  platforms.value = await res.json()
+  const res = await platformsApi.list()
+  platforms.value = res.data || []
+  if (!res.ok) notifyError('Failed to load platforms.')
 }
 
 async function loadGame(id) {
   try {
-    const res = await fetch(`/api/games/${id}`)
+    const res = await gamesApi.get(id)
     if (res.ok) {
-      const data = await res.json()
+      const data = res.data
       game.value = {
         title: data.title || '',
         platform_id: data.platform_id || '',
@@ -303,6 +306,7 @@ async function loadGame(id) {
     }
   } catch (e) {
     console.error('Failed to load game:', e)
+    notifyError('Failed to load game.')
   }
 }
 
@@ -311,18 +315,15 @@ async function searchIgdb() {
   if (!igdbSearch.value) return
   igdbLoading.value = true
   try {
-    const res = await fetch('/api/lookup/combined', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: igdbSearch.value })
-    })
-    const data = await res.json()
+    const res = await lookupApi.combined(igdbSearch.value)
+    const data = res.data || {}
     igdbResults.value = data.results || [
       ...(data.igdb || []),
       ...(data.gametdb || [])
     ]
   } catch (e) {
     console.error('Search failed:', e)
+    notifyError('Search failed.')
   } finally {
     igdbLoading.value = false
   }
@@ -424,17 +425,20 @@ async function onCoverFileSelected(event) {
   try {
     const form = new FormData()
     form.append('file', file)
-    const res = await fetch('/api/upload/cover', { method: 'POST', body: form })
+    const res = await gamesApi.uploadCover(form)
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      coverUploadError.value = err.detail || 'Upload failed.'
+      const err = res.data || {}
+      coverUploadError.value = err?.detail?.message || err?.detail || err?.error || 'Upload failed.'
+      notifyError(coverUploadError.value)
       return
     }
-    const { url } = await res.json()
+    const { url } = res.data
     game.value.cover_url = url
+    notifySuccess('Cover uploaded.')
   } catch (e) {
     coverUploadError.value = 'Upload failed.'
     console.error(e)
+    notifyError('Upload failed.')
   } finally {
     coverUploading.value = false
     event.target.value = ''
@@ -445,25 +449,27 @@ async function saveGame() {
   saving.value = true
   duplicateWarning.value = null
   try {
-    let url = isEditMode.value ? `/api/games/${editId.value}` : '/api/games'
-    if (saveForced.value) url += '?force=true'
-    const method = isEditMode.value ? 'PUT' : 'POST'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(game.value)
-    })
+    const res = isEditMode.value
+      ? await gamesApi.update(editId.value, game.value)
+      : await gamesApi.create(game.value, saveForced.value)
     if (res.status === 409) {
-      const data = await res.json()
+      const data = res.data?.detail || res.data || {}
       duplicateWarning.value = { existing_id: data.existing_id }
+      notifyError('Game already exists in this platform.')
       return
     }
     if (res.ok) {
       saveForced.value = false
+      notifySuccess(isEditMode.value ? 'Game updated.' : 'Game created.')
       router.push(isEditMode.value ? `/game/${editId.value}` : '/')
+    } else {
+      const detail = res.data?.detail
+      const message = detail?.message || detail || res.data?.error || 'Failed to save game.'
+      notifyError(message)
     }
   } catch (e) {
     console.error('Failed to save:', e)
+    notifyError('Failed to save game.')
   } finally {
     saving.value = false
   }

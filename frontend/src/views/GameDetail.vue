@@ -183,6 +183,8 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { gamesApi, priceApi } from '../api'
+import { notifyError, notifySuccess } from '../composables/useNotifications'
 import {
   Chart,
   LineController,
@@ -338,8 +340,8 @@ async function checkPrice() {
   priceLoading.value = true
   priceError.value = ''
   try {
-    const res = await fetch(`/api/games/${route.params.id}/price-check`, { method: 'POST' })
-    const data = await res.json()
+    const res = await priceApi.check(route.params.id)
+    const data = res.data || {}
     if (data.error) {
       priceError.value = data.error
     } else {
@@ -348,6 +350,7 @@ async function checkPrice() {
   } catch (e) {
     priceError.value = 'Price check failed'
     console.error(e)
+    notifyError('Price check failed.')
   } finally {
     priceLoading.value = false
   }
@@ -355,20 +358,28 @@ async function checkPrice() {
 
 async function loadPriceHistory() {
   try {
-    const res = await fetch(`/api/games/${route.params.id}/price-history`)
-    if (res.ok) priceHistory.value = await res.json()
+    const res = await priceApi.history(route.params.id)
+    if (res.ok) priceHistory.value = res.data || []
   } catch (e) {
     console.error('Failed to load price history:', e)
+    notifyError('Failed to load price history.')
   }
 }
 
 async function enrichCover() {
   enriching.value = true
   try {
-    const res = await fetch(`/api/games/${route.params.id}/enrich`, { method: 'POST' })
-    if (res.ok) await loadGame()
+    const res = await gamesApi.enrich(route.params.id)
+    if (res.ok) {
+      notifySuccess('Cover enriched.')
+      await loadGame()
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Could not enrich cover.')
+    }
   } catch (e) {
     console.error('Enrich failed:', e)
+    notifyError('Cover enrichment failed.')
   } finally {
     enriching.value = false
   }
@@ -380,12 +391,13 @@ function coverStyle(url) {
 
 async function loadGame() {
   try {
-    const res = await fetch(`/api/games/${route.params.id}`)
+    const res = await gamesApi.get(route.params.id)
     if (res.ok) {
-      game.value = await res.json()
+      game.value = res.data
     }
   } catch (e) {
     console.error('Failed to load game:', e)
+    notifyError('Failed to load game.')
   } finally {
     loading.value = false
   }
@@ -395,22 +407,31 @@ async function deleteGame() {
   if (!confirm('Are you sure you want to delete this game?')) return
 
   try {
-    const res = await fetch(`/api/games/${route.params.id}`, { method: 'DELETE' })
+    const res = await gamesApi.remove(route.params.id)
     if (res.ok) {
+      notifySuccess('Game deleted.')
       router.push('/')
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to delete game.')
     }
   } catch (e) {
     console.error('Failed to delete:', e)
+    notifyError('Failed to delete game.')
   }
 }
 
 async function saveCoverUrl(url) {
-  await fetch(`/api/games/${route.params.id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...game.value, cover_url: url })
-  })
-  game.value.cover_url = url
+  const res = await gamesApi.update(route.params.id, { ...game.value, cover_url: url })
+  if (res.ok) {
+    game.value.cover_url = url
+    return true
+  }
+  if (res.status !== 404) {
+    const detail = res.data?.detail
+    notifyError(detail?.message || detail || 'Failed to save cover.')
+  }
+  return false
 }
 
 async function onCoverFileSelected(event) {
@@ -426,17 +447,20 @@ async function onCoverFileSelected(event) {
   try {
     const form = new FormData()
     form.append('file', file)
-    const res = await fetch('/api/upload/cover', { method: 'POST', body: form })
+    const res = await gamesApi.uploadCover(form)
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      coverUploadError.value = err.detail || 'Upload failed.'
+      const err = res.data || {}
+      coverUploadError.value = err?.detail?.message || err?.detail || err?.error || 'Upload failed.'
+      notifyError(coverUploadError.value)
       return
     }
-    const { url } = await res.json()
-    await saveCoverUrl(url)
+    const { url } = res.data
+    const saved = await saveCoverUrl(url)
+    if (saved) notifySuccess('Cover uploaded.')
   } catch (e) {
     coverUploadError.value = 'Upload failed.'
     console.error(e)
+    notifyError('Upload failed.')
   } finally {
     coverUploading.value = false
     event.target.value = ''
@@ -444,7 +468,8 @@ async function onCoverFileSelected(event) {
 }
 
 async function removeCover() {
-  await saveCoverUrl('')
+  const saved = await saveCoverUrl('')
+  if (saved) notifySuccess('Cover removed.')
 }
 
 async function addManualEntry() {
@@ -452,17 +477,18 @@ async function addManualEntry() {
   if (loose_price == null && complete_price == null && new_price == null) return
   manualSaving.value = true
   try {
-    const res = await fetch(`/api/games/${route.params.id}/price-manual`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ loose_price, complete_price, new_price })
-    })
+    const res = await priceApi.manual(route.params.id, { loose_price, complete_price, new_price })
     if (res.ok) {
       manualEntry.value = { loose_price: null, complete_price: null, new_price: null }
+      notifySuccess('Manual price entry added.')
       await loadPriceHistory()
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to save manual entry.')
     }
   } catch (e) {
     console.error('Failed to save manual entry:', e)
+    notifyError('Failed to save manual entry.')
   } finally {
     manualSaving.value = false
   }

@@ -1,5 +1,6 @@
 <template>
   <div id="app">
+    <NotificationStack />
     <header class="top-bar">
       <router-link to="/" class="logo" active-class="" exact-active-class="">🗃️ Collectabase</router-link>
 
@@ -64,6 +65,10 @@
     </nav>
   </div>
 </template>
+
+<script setup>
+import NotificationStack from './components/NotificationStack.vue'
+</script>
 
 <style scoped>
 /* ── Top bar ── */

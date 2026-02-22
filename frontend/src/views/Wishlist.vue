@@ -29,6 +29,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { gamesApi } from '../api'
 
 const games = ref([])
 const loading = ref(true)
@@ -39,8 +40,8 @@ function coverStyle(url) {
 
 async function loadWishlist() {
   try {
-    const res = await fetch('/api/games?wishlist=true')
-    games.value = await res.json()
+    const res = await gamesApi.list('?wishlist=true')
+    games.value = res.data || []
   } catch (e) {
     console.error('Failed to load wishlist:', e)
   } finally {

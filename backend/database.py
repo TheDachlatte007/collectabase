@@ -1,30 +1,47 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-import sqlite3
 import os
+import sqlite3
 from contextlib import contextmanager
 
-_db_url = os.getenv("DATABASE_URL", "sqlite:///app/data/games.db")
-DATABASE_PATH = _db_url.replace("sqlite:///", "") if not _db_url.startswith("sqlite:////") else _db_url.replace("sqlite:////", "/")
+_db_url = os.getenv("DATABASE_URL", "sqlite:////app/app/data/games.db")
+if _db_url.startswith("sqlite:////"):
+    DATABASE_PATH = _db_url.replace("sqlite:////", "/")
+else:
+    DATABASE_PATH = _db_url.replace("sqlite:///", "")
+
+
+@contextmanager
+def get_db():
+    """Context manager for sqlite connections."""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def dict_from_row(row):
+    return dict(row) if row else None
+
 
 def init_db():
-    """Initialize database with schema"""
+    """Initialize schema and default platform seed."""
     os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
-    
+
     with get_db() as db:
-        # Platforms table
-        db.execute("""
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS platforms (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
                 manufacturer TEXT,
                 type TEXT
             )
-        """)
-        
-        # Games table
-        db.execute("""
+            """
+        )
+
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -52,10 +69,11 @@ def init_db():
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (platform_id) REFERENCES platforms(id)
             )
-        """)
-        
-        # Price history table
-        db.execute("""
+            """
+        )
+
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER NOT NULL,
@@ -68,11 +86,14 @@ def init_db():
                 fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
             )
-        """)
+            """
+        )
 
-        db.commit()
+        try:
+            db.execute("ALTER TABLE games ADD COLUMN item_type TEXT DEFAULT 'game'")
+        except sqlite3.OperationalError:
+            pass
 
-        # Insert default platforms
         default_platforms = [
             ("PlayStation 5", "Sony", "Console"),
             ("PlayStation 4", "Sony", "Console"),
@@ -104,27 +125,15 @@ def init_db():
             ("Sega Genesis/Mega Drive", "Sega", "Console"),
             ("Sega Master System", "Sega", "Console"),
             ("Sega Game Gear", "Sega", "Handheld"),
-            ]
-        # Migration: add item_type if not exists
-        try:
-            db.execute("ALTER TABLE games ADD COLUMN item_type TEXT DEFAULT 'game'")
-            db.commit()
-        except:
-            pass  # Column already exists, ignore
-
+        ]
         for name, manufacturer, type_ in default_platforms:
-            try:
-                db.execute(
-                    "INSERT OR IGNORE INTO platforms (name, manufacturer, type) VALUES (?, ?, ?)",
-                    (name, manufacturer, type_)
-                )
-            except:
-                pass
-        
-        db.commit()
-        
-        # Auto-classify existing entries based on platform type
-        db.execute("""
+            db.execute(
+                "INSERT OR IGNORE INTO platforms (name, manufacturer, type) VALUES (?, ?, ?)",
+                (name, manufacturer, type_),
+            )
+
+        db.execute(
+            """
             UPDATE games SET item_type = 'console'
             WHERE item_type = 'game'
             AND platform_id IN (
@@ -142,52 +151,6 @@ def init_db():
                 OR LOWER(title) LIKE '%nintendo 64%'
                 OR LOWER(title) LIKE '%dreamcast%'
             )
-        """)
+            """
+        )
         db.commit()
-
-
-# SQLAlchemy Setup
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-class Platform(Base):
-    __tablename__ = "platforms"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True, unique=True)
-    manufacturer = Column(String)
-    type = Column(String)
-
-class Game(Base):
-    __tablename__ = "games"
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    platform_id = Column(Integer, ForeignKey("platforms.id"))
-    # ... alle anderen Felder wie in deiner Tabelle
-
-# Tabelle erstellen
-Base.metadata.create_all(bind=engine)
-
-# Dependency für FastAPI
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-@contextmanager
-def get_db():
-    """Context manager for database connections"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-def dict_from_row(row):
-    """Convert sqlite3.Row to dict"""
-    return dict(row) if row else None
