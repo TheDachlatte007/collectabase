@@ -6,7 +6,11 @@
       "Bash(cmd.exe /c \"where npm 2>&1\")",
       "Bash(cmd.exe /c \"node --version 2>&1\")",
       "Bash(cmd.exe /c \"where npm\")",
-      "Bash(powershell.exe -Command \"Get-Command npm | Select-Object -ExpandProperty Source\")"
+      "Bash(powershell.exe -Command \"Get-Command npm | Select-Object -ExpandProperty Source\")",
+      "WebFetch(domain:www.pricecharting.com)",
+      "WebFetch(domain:blog.pricecharting.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

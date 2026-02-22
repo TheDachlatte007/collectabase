@@ -89,10 +89,49 @@ def init_db():
             """
         )
 
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS price_catalog (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                pricecharting_id TEXT,
+                title            TEXT NOT NULL,
+                platform         TEXT NOT NULL,
+                loose_usd        REAL,
+                cib_usd          REAL,
+                new_usd          REAL,
+                loose_eur        REAL,
+                cib_eur          REAL,
+                new_eur          REAL,
+                page_url         TEXT,
+                scraped_at       TEXT DEFAULT CURRENT_TIMESTAMP,
+                changed_at       TEXT
+            )
+            """
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_price_catalog_title ON price_catalog(title COLLATE NOCASE)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_price_catalog_platform ON price_catalog(platform)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_price_catalog_platform_title ON price_catalog(platform, title COLLATE NOCASE)"
+        )
+        db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_price_catalog_platform_pcid ON price_catalog(platform, pricecharting_id)"
+        )
+
         try:
             db.execute("ALTER TABLE games ADD COLUMN item_type TEXT DEFAULT 'game'")
         except sqlite3.OperationalError:
             pass
+        try:
+            db.execute("ALTER TABLE price_catalog ADD COLUMN changed_at TEXT")
+        except sqlite3.OperationalError:
+            pass
+        db.execute(
+            "UPDATE price_catalog SET changed_at = scraped_at WHERE changed_at IS NULL"
+        )
 
         default_platforms = [
             ("PlayStation 5", "Sony", "Console"),
