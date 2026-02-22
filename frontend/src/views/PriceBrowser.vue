@@ -29,7 +29,7 @@
     <!-- Catalog stats + scrape controls -->
     <div class="catalog-bar mb-3">
       <span class="text-muted catalog-count">
-        {{ total.toLocaleString() }} entries in catalog
+        {{ total.toLocaleString() }} entries in current view
         <span v-if="lastScraped"> · last updated {{ lastScraped }}</span>
       </span>
       <div class="scrape-controls">
@@ -54,7 +54,16 @@
       Scraping PriceCharting catalog – this may take several minutes. You can keep using the app.
     </div>
     <div v-if="scrapeResult" class="scrape-result mb-3">
-      ✓ Scraped {{ scrapeResult.scraped.toLocaleString() }} entries for: {{ scrapeResult.platforms.join(', ') }}
+      ✓ Scrape finished for: {{ scrapeResult.platforms.join(', ') }}
+      <span class="scrape-kpi">
+        processed {{ (scrapeResult.scraped || 0).toLocaleString() }} ·
+        new {{ (scrapeResult.inserted || 0).toLocaleString() }} ·
+        changed {{ (scrapeResult.updated || 0).toLocaleString() }} ·
+        unchanged {{ (scrapeResult.unchanged || 0).toLocaleString() }}
+      </span>
+    </div>
+    <div v-if="selectedPlatform" class="filter-notice mb-3">
+      Filter active: showing only platform "{{ selectedPlatform }}"
     </div>
 
     <div v-if="loading" class="loading">Loading catalog…</div>
@@ -313,6 +322,10 @@ async function startScrape() {
     const res = await priceCatalogApi.scrape(scrapeTarget.value)
     if (res.ok && res.data) {
       scrapeResult.value = res.data
+      lastScraped.value = new Date().toLocaleString('de-DE')
+      if (scrapeTarget.value === 'all') {
+        selectedPlatform.value = ''
+      }
       await Promise.all([loadPage(1), loadPlatforms()])
     }
   } catch (e) {
@@ -484,6 +497,18 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
   font-size: 0.9rem;
   color: var(--text);
+}
+
+.scrape-kpi {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.filter-notice {
+  font-size: 0.85rem;
+  color: #fbbf24;
 }
 
 /* ── Table ── */

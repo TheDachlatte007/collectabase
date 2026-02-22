@@ -11,8 +11,14 @@
 
     <div v-else class="grid">
       <div v-for="game in games" :key="game.id" class="game-card">
-        <div class="cover" :style="coverStyle(game.cover_url)">
-          <span v-if="!game.cover_url">🎮</span>
+        <div class="cover">
+          <img
+            v-if="coverSrc(game)"
+            :src="coverSrc(game)"
+            class="cover-image"
+            @error="markBroken(game.id)"
+          />
+          <span v-else>{{ coverEmoji(game.item_type) }}</span>
         </div>
         <div class="info">
           <h3>{{ game.title }}</h3>
@@ -30,12 +36,21 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { gamesApi } from '../api'
+import { coverEmoji, makeFallbackCoverDataUrl, needsAutoCover } from '../utils/coverFallback'
 
 const games = ref([])
 const loading = ref(true)
+const brokenCoverIds = ref({})
 
-function coverStyle(url) {
-  return url ? { backgroundImage: `url(${url})` } : {}
+function markBroken(id) {
+  brokenCoverIds.value[id] = true
+}
+
+function coverSrc(game) {
+  if (!game) return null
+  if (game.cover_url && !brokenCoverIds.value[game.id]) return game.cover_url
+  if (needsAutoCover(game.item_type)) return makeFallbackCoverDataUrl(game)
+  return null
 }
 
 async function loadWishlist() {
@@ -69,12 +84,18 @@ onMounted(loadWishlist)
 .cover {
   aspect-ratio: 3/4;
   background: var(--bg);
-  background-size: cover;
-  background-position: center;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 4rem;
+  overflow: hidden;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .info {

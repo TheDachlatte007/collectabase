@@ -55,7 +55,7 @@ async def enrich_game_cover(game_id: int):
         if gametdb_results and gametdb_results[0].get("cover_url"):
             cover_url = gametdb_results[0]["cover_url"]
 
-    if not cover_url and game.get("item_type") == "console":
+    if not cover_url and game.get("item_type") in {"console", "accessory"}:
         cover_url = get_console_image(game.get("platform_name") or game.get("title", ""))
 
     if not cover_url:
@@ -98,7 +98,7 @@ async def enrich_all_covers(limit: int = 20):
             if gametdb_results and gametdb_results[0].get("cover_url"):
                 cover_url = gametdb_results[0]["cover_url"]
 
-        if not cover_url and item.get("item_type") == "console":
+        if not cover_url and item.get("item_type") in {"console", "accessory"}:
             cover_url = get_console_image(item.get("platform_name") or item.get("title", ""))
 
         if cover_url:
@@ -112,4 +112,3 @@ async def enrich_all_covers(limit: int = 20):
         else:
             results["failed"] += 1
     return results
-

@@ -9,9 +9,15 @@
 
     <div v-else class="detail-layout">
       <div class="card cover-card">
-        <div class="cover-large" :style="coverStyle(game.cover_url)">
-          <span v-if="!game.cover_url">🎮</span>
-          <button v-if="game.cover_url" @click="removeCover" class="cover-remove-btn" title="Remove cover">✕</button>
+        <div class="cover-large">
+          <img v-if="currentCoverSrc" :src="currentCoverSrc" class="cover-image" @error="onDetailCoverError" />
+          <span v-else>{{ coverEmoji(game?.item_type) }}</span>
+          <button
+            v-if="game.cover_url && !isSvgDataCover(game.cover_url)"
+            @click="removeCover"
+            class="cover-remove-btn"
+            title="Remove cover"
+          >✕</button>
         </div>
         <div v-if="game.current_value" class="value-badge">
           €{{ game.current_value }}
@@ -38,18 +44,18 @@
             <h1>{{ game.title }}</h1>
             <p class="text-muted">{{ game.platform_name }}</p>
           </div>
-          <div class="actions">
-            <router-link :to="`/edit/${game.id}`" class="btn btn-secondary">Edit</router-link>
-            <button @click="enrichCover" class="btn btn-secondary" :disabled="enriching">
+          <div class="actions actions-compact">
+            <router-link :to="`/edit/${game.id}`" class="btn btn-secondary btn-compact">Edit</router-link>
+            <button @click="enrichCover" class="btn btn-secondary btn-compact" :disabled="enriching">
               {{ enriching ? '⏳ Fetching...' : '🖼 Enrich Cover' }}
             </button>
-            <button @click="checkPrice" class="btn btn-secondary" :disabled="priceLoading">
+            <button @click="checkPrice" class="btn btn-secondary btn-compact" :disabled="priceLoading">
               {{ priceLoading ? '⏳ Fetching...' : '💰 Fetch Market Price' }}
             </button>
-            <a :href="ebayUrl()" target="_blank" rel="noopener" class="btn btn-secondary">🛒 eBay Sold</a>
-            <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="btn btn-secondary">📈 PriceCharting</a>
-            <a :href="rawgUrl()" target="_blank" rel="noopener" class="btn btn-secondary">🎮 RAWG</a>
-            <button @click="deleteGame" class="btn btn-danger">Delete</button>
+            <a :href="ebayUrl()" target="_blank" rel="noopener" class="btn btn-secondary btn-compact">🛒 eBay Sold</a>
+            <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="btn btn-secondary btn-compact">📈 PriceCharting</a>
+            <a :href="rawgUrl()" target="_blank" rel="noopener" class="btn btn-secondary btn-compact">🎮 RAWG</a>
+            <button @click="deleteGame" class="btn btn-danger btn-compact">Delete</button>
           </div>
         </div>
 
@@ -145,7 +151,7 @@
             Last checked: {{ formatDate(latestPrice.fetched_at) }}
             <span :class="`source-pill source-${latestPrice.source}`">{{ latestPrice.source }}</span>
           </div>
-          <div v-if="priceError && !showMarketConfigWarning" class="price-error">{{ priceError }}</div>
+          <div v-if="priceError" class="price-error">{{ priceError }}</div>
           <div class="start-value-row">
             <span class="text-muted">
               Start value:
@@ -167,9 +173,6 @@
               </button>
               <button class="btn btn-secondary" @click="dismissMarketSuggestion">Dismiss</button>
             </div>
-          </div>
-          <div v-if="showMarketConfigWarning" class="price-warning">
-            ⚠️ Configure PRICECHARTING_TOKEN or EBAY_CLIENT_ID to enable market prices
           </div>
           <div v-if="rawgReference" class="rawg-reference">
             <div class="rawg-title">RAWG reference links:</div>
@@ -230,6 +233,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { gamesApi, priceApi } from '../api'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
+import { coverEmoji, isSvgDataCover, makeFallbackCoverDataUrl, needsAutoCover } from '../utils/coverFallback'
 import {
   Chart,
   LineController,
@@ -261,10 +265,17 @@ const coverUploadError = ref('')
 const manualEntry = ref({ loose_price: null, complete_price: null, new_price: null })
 const manualSaving = ref(false)
 const startValue = ref(null)
+const coverHasError = ref(false)
+const coverAutoFixing = ref(false)
 let chartInstance = null
 
 const latestPrice = computed(() => priceHistory.value[0] ?? null)
-const showMarketConfigWarning = computed(() => priceError.value === 'CONFIG_NOT_SET')
+const currentCoverSrc = computed(() => {
+  if (!game.value) return null
+  if (game.value.cover_url && !coverHasError.value) return game.value.cover_url
+  if (needsAutoCover(game.value.item_type)) return makeFallbackCoverDataUrl(game.value)
+  return null
+})
 
 function formatChartDate(dt) {
   if (!dt) return ''
@@ -427,9 +438,7 @@ async function checkPrice() {
       return
     }
     if (data.error) {
-      if (String(data.error).includes('Configure PRICECHARTING_TOKEN or EBAY_CLIENT_ID')) {
-        priceError.value = 'CONFIG_NOT_SET'
-      } else if (data.source === 'rawg') {
+      if (data.source === 'rawg') {
         priceError.value = data.error
         rawgReference.value = data
       } else {
@@ -538,8 +547,31 @@ async function enrichCover() {
   }
 }
 
-function coverStyle(url) {
-  return url ? { backgroundImage: `url(${url})` } : {}
+async function ensureNonGameCover() {
+  if (!game.value || !needsAutoCover(game.value.item_type)) return
+  if (coverAutoFixing.value) return
+  if (game.value.cover_url && !coverHasError.value) return
+
+  coverAutoFixing.value = true
+  try {
+    const fallback = makeFallbackCoverDataUrl(game.value)
+    if (game.value.cover_url !== fallback) {
+      const saved = await saveCoverUrl(fallback)
+      if (saved) {
+        game.value.cover_url = fallback
+        coverHasError.value = false
+      }
+    } else {
+      coverHasError.value = false
+    }
+  } finally {
+    coverAutoFixing.value = false
+  }
+}
+
+async function onDetailCoverError() {
+  coverHasError.value = true
+  await ensureNonGameCover()
 }
 
 async function loadGame() {
@@ -547,10 +579,12 @@ async function loadGame() {
     const res = await gamesApi.get(route.params.id)
     if (res.ok) {
       game.value = res.data
+      coverHasError.value = false
       if (startValue.value == null) {
         const v = Number(game.value.current_value)
         startValue.value = Number.isFinite(v) ? v : null
       }
+      await ensureNonGameCover()
     }
   } catch (e) {
     console.error('Failed to load game:', e)
@@ -692,14 +726,20 @@ onMounted(async () => {
 .cover-large {
   aspect-ratio: 3/4;
   background: var(--bg);
-  background-size: cover;
-  background-position: center;
   border-radius: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 6rem;
   position: relative;
+  overflow: hidden;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .cover-remove-btn {
@@ -753,6 +793,18 @@ onMounted(async () => {
   gap: 0.5rem;
   flex-wrap: wrap;
   flex-shrink: 0;
+  justify-content: flex-end;
+}
+
+.actions-compact {
+  max-width: 760px;
+}
+
+.btn-compact {
+  min-height: 34px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
+  gap: 0.35rem;
 }
 
 .details-grid {

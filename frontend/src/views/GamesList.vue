@@ -33,8 +33,14 @@
 
     <div v-else class="grid">
       <div v-for="game in filteredGames" :key="game.id" class="game-card">
-        <div class="cover" :style="coverStyle(game.cover_url)">
-          <span v-if="!game.cover_url">{{ coverEmoji(game.item_type) }}</span>
+        <div class="cover">
+          <img
+            v-if="coverSrc(game)"
+            :src="coverSrc(game)"
+            class="cover-image"
+            @error="markBroken(game.id)"
+          />
+          <span v-else>{{ coverEmoji(game.item_type) }}</span>
         </div>
         <div class="info">
           <h3>{{ game.title }}</h3>
@@ -55,6 +61,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { gamesApi, platformsApi } from '../api'
+import { coverEmoji, makeFallbackCoverDataUrl, needsAutoCover } from '../utils/coverFallback'
 
 const games = ref([])
 const platforms = ref([])
@@ -62,6 +69,7 @@ const loading = ref(true)
 const search = ref('')
 const selectedPlatform = ref('')
 const selectedType = ref('')
+const brokenCoverIds = ref({})
 
 const filteredGames = computed(() => {
   return games.value.filter(g => {
@@ -82,18 +90,15 @@ function typeLabel(type) {
   return labels[type] || type
 }
 
-function coverStyle(url) {
-  return url ? { backgroundImage: `url(${url})` } : {}
+function markBroken(id) {
+  brokenCoverIds.value[id] = true
 }
 
-function coverEmoji(type) {
-  const emojis = {
-    game: '🎮',
-    console: '🖥️',
-    accessory: '🕹️',
-    misc: '📦'
-  }
-  return emojis[type] || '🎮'
+function coverSrc(game) {
+  if (!game) return null
+  if (game.cover_url && !brokenCoverIds.value[game.id]) return game.cover_url
+  if (needsAutoCover(game.item_type)) return makeFallbackCoverDataUrl(game)
+  return null
 }
 
 async function loadData() {
@@ -177,12 +182,18 @@ onMounted(loadData)
 .cover {
   aspect-ratio: 3/4;
   background: var(--bg);
-  background-size: cover;
-  background-position: center;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 4rem;
+  overflow: hidden;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .info {

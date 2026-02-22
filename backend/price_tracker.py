@@ -49,7 +49,6 @@ PLATFORM_SLUGS = {
 }
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Collectabase/1.0)"}
-NOT_CONFIGURED_ERROR = "Configure PRICECHARTING_TOKEN or EBAY_CLIENT_ID to enable market prices"
 _EBAY_TOKEN_CACHE = {"token": None, "expires_at": 0.0}
 
 
@@ -242,11 +241,14 @@ async def _fetch_pricecharting_scrape(title: str, platform_name: str):
 
 
 async def fetch_pricecharting(title: str, platform_name: str):
-    """Fetch prices from PriceCharting. Uses API token if available, scraping as fallback."""
+    """Fetch prices from PriceCharting via scraping first; API token path is optional fallback."""
+    scraped = await _fetch_pricecharting_scrape(title, platform_name)
+    if scraped:
+        return scraped
     token = _pricecharting_token()
     if token:
         return await _fetch_pricecharting_api(title, platform_name, token)
-    return await _fetch_pricecharting_scrape(title, platform_name)
+    return None
 
 
 async def get_ebay_token() -> Optional[str]:
@@ -435,37 +437,33 @@ def _get_game_for_price_lookup(game_id: int):
 
 @router.post("/api/games/{game_id}/fetch-market-price")
 async def fetch_market_price(game_id: int):
-    """Primary source: PriceCharting. Fallback: eBay Browse."""
+    """Primary source: PriceCharting scraper. Fallback: eBay Browse."""
     game = _get_game_for_price_lookup(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    pricecharting_enabled = _pricecharting_token() is not None
     ebay_enabled = all(_ebay_credentials())
     rawg_enabled = _rawg_key() is not None
 
-    if not pricecharting_enabled and not ebay_enabled and not rawg_enabled:
-        return {"error": NOT_CONFIGURED_ERROR}
-
     eur_rate = await get_eur_rate()
 
-    if pricecharting_enabled:
-        pc = await fetch_pricecharting(game["title"], game.get("platform_name") or "")
-        if pc:
-            loose_eur = _to_eur(pc["loose_usd"], eur_rate)
-            cib_eur = _to_eur(pc["cib_usd"], eur_rate)
-            new_eur = _to_eur(pc["new_usd"], eur_rate)
-            with get_db() as db:
-                db.execute(
-                    """
-                    INSERT INTO price_history
-                        (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
-                    VALUES (?, 'pricecharting', ?, ?, ?, ?, ?)
-                    """,
-                    (game_id, loose_eur, cib_eur, new_eur, eur_rate, pc["pricecharting_id"]),
-                )
-                db.commit()
-            return {"market_price": loose_eur, "source": "pricecharting", "condition": "loose"}
+    # Always try scraper first; token does not gate this path.
+    pc = await _fetch_pricecharting_scrape(game["title"], game.get("platform_name") or "")
+    if pc:
+        loose_eur = _to_eur(pc["loose_usd"], eur_rate)
+        cib_eur = _to_eur(pc["cib_usd"], eur_rate)
+        new_eur = _to_eur(pc["new_usd"], eur_rate)
+        with get_db() as db:
+            db.execute(
+                """
+                INSERT INTO price_history
+                    (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
+                VALUES (?, 'pricecharting', ?, ?, ?, ?, ?)
+                """,
+                (game_id, loose_eur, cib_eur, new_eur, eur_rate, pc["pricecharting_id"]),
+            )
+            db.commit()
+        return {"market_price": loose_eur, "source": "pricecharting", "condition": "loose"}
 
     if ebay_enabled:
         ebay = await fetch_ebay_market_price(game["title"], game.get("platform_name") or "")
@@ -607,21 +605,45 @@ async def add_manual_price(game_id: int, entry: ManualPriceEntry):
 # ── Price Catalog (scraped platform catalogs) ─────────────────────────────────
 
 
+async def _fetch_with_retry(client: httpx.AsyncClient, url: str, params: dict, attempts: int = 3):
+    response = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = await client.get(url, params=params)
+        except Exception as e:
+            print(f"Catalog request error {url} params={params} attempt={attempt}: {e}")
+            if attempt < attempts:
+                await asyncio.sleep(1.0 * attempt)
+                continue
+            return None
+
+        if response.status_code < 400:
+            return response
+
+        print(f"Catalog request HTTP {response.status_code} for {url} params={params} attempt={attempt}")
+        if response.status_code in (429, 500, 502, 503, 504) and attempt < attempts:
+            await asyncio.sleep(1.0 * attempt)
+            continue
+        return response
+    return response
+
+
 async def scrape_platform_catalog(platform_slug: str, platform_label: str) -> list:
     """Scrape all games from a PriceCharting console catalog page."""
     entries = []
     base_url = f"https://www.pricecharting.com/console/{platform_slug}"
+    previous_signature = None
+    page_size_hint = None
 
     async with httpx.AsyncClient(timeout=20, headers=HEADERS, follow_redirects=True) as client:
-        for page in range(1, 51):  # max 50 pages safety cap
+        for page in range(1, 121):  # safety cap
             params = {"sort": "title", "order": "asc", "page": str(page)}
-            try:
-                res = await client.get(base_url, params=params)
-                print(f"Catalog scrape {platform_slug} page {page}: HTTP {res.status_code}")
-                if res.status_code >= 400:
-                    break
-            except Exception as e:
-                print(f"Catalog scrape error {platform_slug} page {page}: {e}")
+            res = await _fetch_with_retry(client, base_url, params=params, attempts=3)
+            if res is None:
+                break
+
+            print(f"Catalog scrape {platform_slug} page {page}: HTTP {res.status_code}")
+            if res.status_code >= 400:
                 break
 
             soup = BeautifulSoup(res.text, "html.parser")
@@ -673,14 +695,25 @@ async def scrape_platform_catalog(platform_slug: str, platform_label: str) -> li
             if not page_entries:
                 break
 
+            signature = tuple(
+                (row["pricecharting_id"] or row["title"]).strip().lower() for row in page_entries
+            )
+            if previous_signature and signature == previous_signature:
+                print(f"Catalog scrape {platform_slug}: duplicate page signature at page {page}, stopping")
+                break
+            previous_signature = signature
+
+            if page_size_hint is None:
+                page_size_hint = len(page_entries)
+
             entries.extend(page_entries)
             print(f"  → {len(page_entries)} games collected (total so far: {len(entries)})")
 
-            if len(page_entries) < 25:
+            if page_size_hint and len(page_entries) < max(10, page_size_hint):
                 # Likely the last page
                 break
 
-            await asyncio.sleep(1.0)  # be polite between pages
+            await asyncio.sleep(1.1)  # be polite between pages
 
     return entries
 
