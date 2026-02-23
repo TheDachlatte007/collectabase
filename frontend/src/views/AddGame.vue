@@ -56,11 +56,15 @@
           <div class="form-group">
             <label>Barcode</label>
             <div class="barcode-row">
-              <input v-model="game.barcode" />
+              <input v-model="game.barcode" @keyup.enter="lookupBarcode" />
+              <button type="button" class="btn btn-secondary barcode-btn" @click="lookupBarcode" :disabled="barcodeLookupLoading || !game.barcode" title="Lookup barcode">
+                {{ barcodeLookupLoading ? '...' : '🔎' }}
+              </button>
               <button type="button" class="btn btn-secondary barcode-btn" @click="openScanner" title="Scan barcode">
                 📷
               </button>
             </div>
+            <p v-if="barcodeLookupInfo" class="barcode-status">{{ barcodeLookupInfo }}</p>
           </div>
 
           <div class="form-group">
@@ -213,7 +217,7 @@
           <video ref="scannerVideo" class="scanner-video" autoplay playsinline muted></video>
           <div class="scanner-reticle"></div>
           <p v-if="scannerError" class="scanner-error">{{ scannerError }}</p>
-          <p v-else class="scanner-hint">Point camera at barcode</p>
+          <p v-else class="scanner-hint">Point camera at barcode {{ scannerMode ? `(${scannerMode})` : '' }}</p>
         </div>
       </div>
     </div>
@@ -221,7 +225,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted,nextTick } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { gamesApi, lookupApi, platformsApi } from '../api'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
@@ -242,8 +246,13 @@ const duplicateWarning = ref(null)  // { existing_id } when 409
 const saveForced = ref(false)
 const scannerOpen = ref(false)
 const scannerError = ref('')
+const scannerMode = ref('')
 const scannerVideo = ref(null)
+const barcodeLookupLoading = ref(false)
+const barcodeLookupInfo = ref('')
 let cameraStream = null
+let scanFrame = null
+let zxingControls = null
 
 const game = ref({
   title: '',
@@ -327,6 +336,89 @@ async function searchIgdb() {
   } finally {
     igdbLoading.value = false
   }
+}
+
+function normalizeBarcode(value) {
+  return String(value || '').replace(/\D+/g, '')
+}
+
+async function lookupBarcode() {
+  await lookupBarcodeByValue(game.value.barcode, { fromScan: false })
+}
+
+async function lookupBarcodeByValue(value, { fromScan = false } = {}) {
+  const normalized = normalizeBarcode(value)
+  if (normalized.length < 8) {
+    barcodeLookupInfo.value = 'Barcode seems too short. Please scan a valid UPC/EAN.'
+    if (fromScan) notifyError('Invalid barcode scanned.')
+    return
+  }
+
+  game.value.barcode = normalized
+  barcodeLookupLoading.value = true
+  barcodeLookupInfo.value = 'Looking up barcode...'
+
+  try {
+    const res = await lookupApi.barcode(normalized)
+    if (!res.ok) {
+      const detail = res.data?.detail
+      const message = detail?.message || detail || 'Barcode lookup failed.'
+      barcodeLookupInfo.value = message
+      notifyError(message)
+      return
+    }
+
+    const data = res.data || {}
+    const suggestions = data.suggestions || []
+    const titleCandidates = data.title_candidates || []
+    const existing = data.existing || null
+
+    if (existing?.id) {
+      duplicateWarning.value = { existing_id: existing.id }
+      barcodeLookupInfo.value = `Already in collection: ${existing.title}${existing.platform_name ? ` (${existing.platform_name})` : ''}`
+    } else {
+      duplicateWarning.value = null
+    }
+
+    if (suggestions.length > 0) {
+      igdbResults.value = suggestions
+      igdbSearch.value = data.lookup_title || titleCandidates[0] || ''
+      barcodeLookupInfo.value = `Found ${suggestions.length} metadata matches. Tap one to apply.`
+      if (!existing?.id) notifySuccess('Barcode recognized. Choose a match below.')
+      return
+    }
+
+    if (titleCandidates.length > 0) {
+      igdbSearch.value = titleCandidates[0]
+      await searchIgdb()
+      if (igdbResults.value.length > 0) {
+        barcodeLookupInfo.value = `Found title "${titleCandidates[0]}". Choose a match below.`
+        if (!existing?.id) notifySuccess('Title candidate found for barcode.')
+      } else {
+        barcodeLookupInfo.value = `Found title "${titleCandidates[0]}", but no IGDB/GameTDB match.`
+      }
+      return
+    }
+
+    if (!existing?.id) {
+      barcodeLookupInfo.value = 'No metadata found. You can still add this item manually.'
+      if (fromScan) notifyError('No metadata found for barcode.')
+    }
+  } catch (e) {
+    console.error('Barcode lookup failed:', e)
+    barcodeLookupInfo.value = 'Barcode lookup failed.'
+    notifyError('Barcode lookup failed.')
+  } finally {
+    barcodeLookupLoading.value = false
+  }
+}
+
+async function handleDetectedBarcode(rawValue) {
+  const normalized = normalizeBarcode(rawValue)
+  if (!normalized) return
+
+  closeScanner()
+  await lookupBarcodeByValue(normalized, { fromScan: true })
 }
 
 function fillFromIgdb(result) {
@@ -483,6 +575,7 @@ function saveAnyway() {
 function openScanner() {
   scannerOpen.value = true
   scannerError.value = ''
+  scannerMode.value = ''
   nextTick(() => startCamera())
 }
 
@@ -492,37 +585,70 @@ function closeScanner() {
 }
 
 function stopCamera() {
+  if (scanFrame) {
+    cancelAnimationFrame(scanFrame)
+    scanFrame = null
+  }
+  if (zxingControls && typeof zxingControls.stop === 'function') {
+    zxingControls.stop()
+    zxingControls = null
+  }
   if (cameraStream) {
     cameraStream.getTracks().forEach(t => t.stop())
     cameraStream = null
+  }
+  if (scannerVideo.value) {
+    scannerVideo.value.srcObject = null
   }
 }
 
 async function startCamera() {
   try {
-    if (!('BarcodeDetector' in window)) {
-      scannerError.value = 'Barcode scanning not supported on this browser'
+    if (window.BarcodeDetector) {
+      scannerMode.value = 'native scanner'
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
+      scannerVideo.value.srcObject = cameraStream
+      await scannerVideo.value.play()
+
+      const detector = new window.BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'],
+      })
+      const scan = async () => {
+        if (!scannerOpen.value) return
+        try {
+          const codes = await detector.detect(scannerVideo.value)
+          if (codes?.length) {
+            const raw = codes[0]?.rawValue
+            if (raw) {
+              await handleDetectedBarcode(raw)
+              return
+            }
+          }
+        } catch {
+          // Keep scanning; errors here are usually transient while frames are warming up.
+        }
+        scanFrame = requestAnimationFrame(scan)
+      }
+      scanFrame = requestAnimationFrame(scan)
       return
     }
-    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    scannerVideo.value.srcObject = cameraStream
-    const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8'] })
-    const scan = async () => {
-      if (!scannerOpen.value) return
-      try {
-        const codes = await detector.detect(scannerVideo.value)
-        if (codes.length > 0) {
-          game.value.barcode = codes[0].rawValue
-          igdbSearch.value = codes[0].rawValue
-          await searchIgdb()
-          closeScanner()
-          return
+
+    scannerMode.value = 'zxing fallback'
+    const { BrowserMultiFormatReader } = await import('@zxing/browser')
+    const reader = new BrowserMultiFormatReader()
+    zxingControls = await reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' } } },
+      scannerVideo.value,
+      async (result) => {
+        if (!result) return
+        const raw = result.getText?.() || ''
+        if (raw) {
+          await handleDetectedBarcode(raw)
         }
-      } catch {}
-      requestAnimationFrame(scan)
-    }
-    scannerVideo.value.onloadedmetadata = () => scan()
-  } catch {
+      }
+    )
+  } catch (e) {
+    console.error('Scanner error:', e)
     scannerError.value = 'Camera access denied. Please allow camera access.'
   }
 }
@@ -658,5 +784,113 @@ onUnmounted(() => {
 .cover-upload-error {
   font-size: 0.8rem;
   color: #ef4444;
+}
+
+.barcode-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.barcode-row input {
+  min-width: 0;
+  flex: 1;
+}
+
+.barcode-btn {
+  min-width: 42px;
+  padding: 0.45rem 0.65rem;
+  justify-content: center;
+}
+
+.barcode-status {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  padding: 1rem;
+}
+
+.scanner-modal {
+  width: min(560px, 100%);
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.scanner-close {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.scanner-body {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: #000;
+}
+
+.scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scanner-reticle {
+  position: absolute;
+  inset: 18% 14%;
+  border: 2px solid rgba(34, 197, 94, 0.9);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.scanner-hint,
+.scanner-error {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.6rem;
+  text-align: center;
+  font-size: 0.82rem;
+  padding: 0 0.75rem;
+}
+
+.scanner-hint {
+  color: #d1d5db;
+}
+
+.scanner-error {
+  color: #fca5a5;
+}
+
+@media (max-width: 639px) {
+  .barcode-btn {
+    min-width: 38px;
+    padding: 0.35rem 0.45rem;
+  }
 }
 </style>

@@ -1,9 +1,11 @@
 import asyncio
 import base64
+from datetime import datetime, timezone
 import os
 import re
 import statistics
 import time
+from difflib import SequenceMatcher
 from typing import Optional
 
 import httpx
@@ -11,7 +13,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from .database import dict_from_row, get_db
+from .database import dict_from_row, get_db, set_app_meta
 
 router = APIRouter()
 
@@ -120,6 +122,94 @@ def _prices_differ(old_value: Optional[float], new_value: Optional[float]) -> bo
     if old_value is None or new_value is None:
         return True
     return abs(float(old_value) - float(new_value)) >= 0.005
+
+
+def _normalize_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    text = str(value).lower().strip()
+    text = text.replace("&", " and ")
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _catalog_match_score(query_title: str, row_title: str) -> float:
+    if not query_title or not row_title:
+        return 0.0
+    if query_title == row_title:
+        return 1.0
+
+    q_tokens = set(query_title.split())
+    r_tokens = set(row_title.split())
+    overlap = len(q_tokens & r_tokens) / max(len(q_tokens), 1)
+    seq = SequenceMatcher(None, query_title, row_title).ratio()
+    contains_bonus = 0.85 if (query_title in row_title or row_title in query_title) else 0.0
+    return max(seq, overlap * 0.9, contains_bonus)
+
+
+def _lookup_local_catalog_price(title: str, platform_name: str):
+    """
+    Try to resolve a market price from already scraped `price_catalog`.
+    This is the same data shown in Price Browser and avoids re-scraping for known entries.
+    """
+    norm_title = _normalize_text(title)
+    if not norm_title:
+        return None
+
+    norm_platform = _normalize_text(platform_name)
+
+    with get_db() as db:
+        rows = []
+        if norm_platform:
+            rows = db.execute(
+                """
+                SELECT *
+                FROM price_catalog
+                WHERE LOWER(platform) = LOWER(?)
+                ORDER BY scraped_at DESC
+                LIMIT 500
+                """,
+                (norm_platform,),
+            ).fetchall()
+        if not rows:
+            rows = db.execute(
+                """
+                SELECT *
+                FROM price_catalog
+                ORDER BY scraped_at DESC
+                LIMIT 1000
+                """
+            ).fetchall()
+
+    best = None
+    best_score = 0.0
+    for row in rows:
+        item = dict_from_row(row)
+        row_norm_title = _normalize_text(item.get("title"))
+        score = _catalog_match_score(norm_title, row_norm_title)
+        if norm_platform and _normalize_text(item.get("platform")) == norm_platform:
+            score += 0.08
+        if score > best_score:
+            best_score = score
+            best = item
+
+    # Keep threshold moderate so "Xbox One 500GB" still matches practical catalog titles.
+    if not best or best_score < 0.62:
+        return None
+
+    loose_eur = best.get("loose_eur")
+    if loose_eur is None:
+        return None
+
+    return {
+        "pricecharting_id": (best.get("pricecharting_id") or ""),
+        "product_name": best.get("title") or title,
+        "platform": best.get("platform") or platform_name,
+        "loose_eur": loose_eur,
+        "cib_eur": best.get("cib_eur"),
+        "new_eur": best.get("new_eur"),
+        "match_score": round(best_score, 3),
+    }
 
 
 async def _fetch_pricecharting_api(title: str, platform_name: str, token: str):
@@ -445,6 +535,33 @@ async def fetch_market_price(game_id: int):
     ebay_enabled = all(_ebay_credentials())
     rawg_enabled = _rawg_key() is not None
 
+    catalog = _lookup_local_catalog_price(game["title"], game.get("platform_name") or "")
+    if catalog:
+        with get_db() as db:
+            db.execute(
+                """
+                INSERT INTO price_history
+                    (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
+                VALUES (?, 'pricecharting', ?, ?, ?, 1.0, ?)
+                """,
+                (
+                    game_id,
+                    catalog["loose_eur"],
+                    catalog["cib_eur"],
+                    catalog["new_eur"],
+                    catalog["pricecharting_id"] or None,
+                ),
+            )
+            db.commit()
+        return {
+            "market_price": catalog["loose_eur"],
+            "source": "pricecharting",
+            "condition": "loose",
+            "matched_title": catalog["product_name"],
+            "matched_platform": catalog["platform"],
+            "match_score": catalog["match_score"],
+        }
+
     eur_rate = await get_eur_rate()
 
     # Always try scraper first; token does not gate this path.
@@ -541,6 +658,12 @@ async def bulk_price_update(limit: int = 100):
     eur_rate = await get_eur_rate()
     token = _pricecharting_token()
     if not token:
+        finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        set_app_meta("last_bulk_price_update_at", finished_at)
+        set_app_meta("last_bulk_price_update_success", 0)
+        set_app_meta("last_bulk_price_update_failed", len(games))
+        set_app_meta("last_bulk_price_update_total", len(games))
+        set_app_meta("last_bulk_price_update_error", "PRICECHARTING_TOKEN not set")
         return {"success": 0, "failed": len(games), "total": len(games), "error": "PRICECHARTING_TOKEN not set"}
 
     success = 0
@@ -571,6 +694,13 @@ async def bulk_price_update(limit: int = 100):
             failed += 1
 
         await asyncio.sleep(0.4)  # stay polite to PriceCharting.
+
+    finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    set_app_meta("last_bulk_price_update_at", finished_at)
+    set_app_meta("last_bulk_price_update_success", success)
+    set_app_meta("last_bulk_price_update_failed", failed)
+    set_app_meta("last_bulk_price_update_total", len(games))
+    set_app_meta("last_bulk_price_update_error", "")
 
     return {"success": success, "failed": failed, "total": len(games)}
 
@@ -926,7 +1056,7 @@ async def scrape_catalog(platform: str = "all"):
         if len(targets) > 1:
             await asyncio.sleep(2.0)  # pause between platforms when scraping all
 
-    return {
+    result = {
         "scraped": total_scraped,
         "inserted": total_inserted,
         "updated": total_updated,
@@ -935,6 +1065,11 @@ async def scrape_catalog(platform: str = "all"):
         "duplicates_removed": total_duplicates_removed,
         "platforms": [lbl for lbl, _ in targets],
     }
+    finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    set_app_meta("last_catalog_scrape_at", finished_at)
+    set_app_meta("last_catalog_scrape_platforms", ", ".join(result["platforms"]))
+    set_app_meta("last_catalog_scrape_total", result["scraped"])
+    return result
 
 
 @router.get("/api/price-catalog")

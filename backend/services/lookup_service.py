@@ -1,7 +1,12 @@
 from typing import Optional
+import hashlib
+import mimetypes
 import os
+from pathlib import Path
+import re
 import time
 import xml.etree.ElementTree as ET
+from urllib.parse import urlparse
 
 import httpx
 
@@ -44,12 +49,121 @@ CONSOLE_IMAGE_MAP = {
 }
 
 _igdb_token_cache = {"token": None, "expires_at": 0.0, "client_id": None}
+CONSOLE_ALIASES = {
+    "ps5": "playstation 5",
+    "ps4": "playstation 4",
+    "ps3": "playstation 3",
+    "ps2": "playstation 2",
+    "series x": "xbox series x/s",
+    "series s": "xbox series x/s",
+    "xbox series x": "xbox series x/s",
+    "xbox series s": "xbox series x/s",
+    "xbox one s": "xbox one",
+    "xbox one x": "xbox one",
+}
+
+
+def _normalize_platform_name(value: str) -> str:
+    text = str(value or "").strip().lower()
+    text = text.replace("&", " and ")
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+_NORMALIZED_CONSOLE_IMAGE_MAP = {
+    _normalize_platform_name(k): v for k, v in CONSOLE_IMAGE_MAP.items()
+}
 
 
 def get_console_image(platform_name: str) -> Optional[str]:
-    if not platform_name:
+    normalized = _normalize_platform_name(platform_name)
+    if not normalized:
         return None
-    return CONSOLE_IMAGE_MAP.get(platform_name.strip().lower())
+
+    direct = _NORMALIZED_CONSOLE_IMAGE_MAP.get(normalized)
+    if direct:
+        return direct
+
+    alias_target = CONSOLE_ALIASES.get(normalized)
+    if alias_target:
+        alias_url = _NORMALIZED_CONSOLE_IMAGE_MAP.get(_normalize_platform_name(alias_target))
+        if alias_url:
+            return alias_url
+
+    for alias, target in CONSOLE_ALIASES.items():
+        if alias in normalized:
+            alias_url = _NORMALIZED_CONSOLE_IMAGE_MAP.get(_normalize_platform_name(target))
+            if alias_url:
+                return alias_url
+
+    # Fallback: fuzzy containment (e.g. "xbox one 500gb", "xbox one wireless controller")
+    for key, url in sorted(_NORMALIZED_CONSOLE_IMAGE_MAP.items(), key=lambda kv: len(kv[0]), reverse=True):
+        if key and key in normalized:
+            return url
+
+    return None
+
+
+def _uploads_dir() -> str:
+    default_uploads = "/app/uploads" if Path("/app").exists() else str(Path(__file__).resolve().parents[2] / "uploads")
+    return os.getenv("UPLOADS_DIR", default_uploads)
+
+
+def _cover_extension(url: str, content_type: str) -> str:
+    ctype = (content_type or "").split(";", 1)[0].strip().lower()
+    if ctype in {"image/jpeg", "image/jpg"}:
+        return ".jpg"
+    if ctype == "image/png":
+        return ".png"
+    if ctype == "image/webp":
+        return ".webp"
+    if ctype == "image/gif":
+        return ".gif"
+
+    path_ext = Path(urlparse(url).path).suffix.lower()
+    if path_ext in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        return ".jpg" if path_ext == ".jpeg" else path_ext
+
+    guessed = (mimetypes.guess_extension(ctype) or "").lower()
+    if guessed in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        return ".jpg" if guessed == ".jpeg" else guessed
+    return ".jpg"
+
+
+async def cache_remote_cover(url: Optional[str]) -> Optional[str]:
+    """
+    Cache a remote cover image locally under UPLOADS_DIR.
+    Returns /uploads/... on success, otherwise original URL.
+    """
+    if not url:
+        return url
+    if not str(url).startswith(("http://", "https://")):
+        return url
+
+    try:
+        uploads_dir = _uploads_dir()
+        os.makedirs(uploads_dir, exist_ok=True)
+
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={"User-Agent": "Collectabase/1.0"}) as client:
+            res = await client.get(url)
+        if res.status_code >= 400:
+            return url
+
+        body = res.content or b""
+        if not body or len(body) > 8 * 1024 * 1024:
+            return url
+
+        ext = _cover_extension(str(url), res.headers.get("content-type", ""))
+        digest = hashlib.sha1(str(url).encode("utf-8")).hexdigest()
+        filename = f"{digest}{ext}"
+        path = Path(uploads_dir) / filename
+
+        if not path.exists():
+            path.write_bytes(body)
+
+        return f"/uploads/{filename}"
+    except Exception:
+        return url
 
 
 async def lookup_igdb_title(title: str):
@@ -179,3 +293,49 @@ async def lookup_combined_title(title: str):
             "gametdb": gametdb.get("error"),
         },
     }
+
+
+def normalize_barcode(value: str) -> str:
+    return re.sub(r"\D+", "", str(value or ""))
+
+
+async def lookup_upcitemdb_barcode(barcode: str):
+    normalized = normalize_barcode(barcode)
+    if len(normalized) < 8:
+        return {"results": [], "error": "invalid_barcode"}
+
+    api_key = os.getenv("UPCITEMDB_API_KEY", "").strip()
+    endpoint = "https://api.upcitemdb.com/prod/v1/lookup" if api_key else "https://api.upcitemdb.com/prod/trial/lookup"
+    headers = {
+        "User-Agent": "Collectabase/1.0",
+        "Accept": "application/json",
+    }
+    if api_key:
+        headers["Authorization"] = api_key
+
+    try:
+        async with httpx.AsyncClient(timeout=12, headers=headers) as client:
+            response = await client.get(endpoint, params={"upc": normalized})
+        if response.status_code >= 400:
+            return {"results": [], "error": f"upcitemdb_status_{response.status_code}"}
+
+        payload = response.json()
+        items = payload.get("items", []) if isinstance(payload, dict) else []
+        results = []
+        for item in items[:5]:
+            title = (item.get("title") or item.get("product_name") or "").strip()
+            if not title:
+                continue
+            images = item.get("images") or []
+            results.append(
+                {
+                    "source": "upcitemdb",
+                    "title": title,
+                    "brand": item.get("brand"),
+                    "description": item.get("description") or item.get("category"),
+                    "cover_url": images[0] if images else None,
+                }
+            )
+        return {"results": results, "error": None}
+    except Exception as e:
+        return {"results": [], "error": str(e)}

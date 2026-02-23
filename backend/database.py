@@ -24,6 +24,33 @@ def dict_from_row(row):
     return dict(row) if row else None
 
 
+def set_app_meta(key: str, value: str):
+    with get_db() as db:
+        db.execute(
+            """
+            INSERT INTO app_meta (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET
+              value = excluded.value,
+              updated_at = CURRENT_TIMESTAMP
+            """,
+            (key, str(value)),
+        )
+        db.commit()
+
+
+def get_app_meta_many(keys):
+    if not keys:
+        return {}
+    placeholders = ",".join("?" for _ in keys)
+    with get_db() as db:
+        rows = db.execute(
+            f"SELECT key, value, updated_at FROM app_meta WHERE key IN ({placeholders})",
+            tuple(keys),
+        ).fetchall()
+    return {row["key"]: {"value": row["value"], "updated_at": row["updated_at"]} for row in rows}
+
+
 def init_db():
     """Initialize schema and default platform seed."""
     os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
@@ -105,6 +132,15 @@ def init_db():
                 page_url         TEXT,
                 scraped_at       TEXT DEFAULT CURRENT_TIMESTAMP,
                 changed_at       TEXT
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )

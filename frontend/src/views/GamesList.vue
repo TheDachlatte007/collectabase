@@ -9,9 +9,9 @@
           class="search-input"
         />
         <select v-model="selectedPlatform" class="filter-select">
-          <option value="">All Platforms</option>
+          <option value="">All Platforms ({{ games.length }})</option>
           <option v-for="p in platforms" :key="p.id" :value="p.id">
-            {{ p.name }}
+            {{ p.name }} ({{ platformCounts[p.id] || 0 }})
           </option>
         </select>
         <select v-model="selectedType" class="filter-select">
@@ -78,6 +78,16 @@ const filteredGames = computed(() => {
     const matchesType = !selectedType.value || g.item_type === selectedType.value
     return matchesSearch && matchesPlatform && matchesType
   })
+})
+
+const platformCounts = computed(() => {
+  const counts = {}
+  for (const g of games.value) {
+    const key = g.platform_id
+    if (key == null) continue
+    counts[key] = (counts[key] || 0) + 1
+  }
+  return counts
 })
 
 function typeLabel(type) {

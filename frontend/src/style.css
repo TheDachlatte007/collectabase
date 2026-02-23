@@ -17,6 +17,35 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --error: #ef4444;
+  --container-padding: 2rem;
+  --btn-padding-y: 0.75rem;
+  --btn-padding-x: 1.5rem;
+  --btn-min-height: 44px;
+  --card-padding: 1.5rem;
+  --field-padding-y: 0.75rem;
+  --field-padding-x: 1rem;
+}
+
+:root[data-theme='emerald'] {
+  --primary: #10b981;
+  --primary-dark: #059669;
+  --secondary: #14b8a6;
+}
+
+:root[data-theme='sunset'] {
+  --primary: #f97316;
+  --primary-dark: #ea580c;
+  --secondary: #ef4444;
+}
+
+:root[data-density='compact'] {
+  --container-padding: 1.25rem;
+  --btn-padding-y: 0.5rem;
+  --btn-padding-x: 1rem;
+  --btn-min-height: 36px;
+  --card-padding: 1rem;
+  --field-padding-y: 0.5rem;
+  --field-padding-x: 0.75rem;
 }
 
 body {
@@ -69,13 +98,13 @@ nav a.router-link-active {
 .container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: var(--container-padding);
   width: 100%;
 }
 
 /* Buttons */
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: var(--btn-padding-y) var(--btn-padding-x);
   border-radius: 0.5rem;
   border: none;
   cursor: pointer;
@@ -87,7 +116,7 @@ nav a.router-link-active {
   /* Snappy tap response, no 300ms delay */
   touch-action: manipulation;
   /* Minimum touch target height */
-  min-height: 44px;
+  min-height: var(--btn-min-height);
 }
 
 .btn-primary {
@@ -117,7 +146,7 @@ nav a.router-link-active {
 .card {
   background: var(--bg-light);
   border-radius: 0.75rem;
-  padding: 1.5rem;
+  padding: var(--card-padding);
   border: 1px solid var(--border);
 }
 
@@ -126,7 +155,7 @@ input, select, textarea {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 0.75rem 1rem;
+  padding: var(--field-padding-y) var(--field-padding-x);
   border-radius: 0.5rem;
   font-size: 1rem;
   width: 100%;

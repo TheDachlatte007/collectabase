@@ -15,7 +15,8 @@ export const platformsApi = {
 }
 
 export const lookupApi = {
-  combined: (title) => apiPost('/api/lookup/combined', { title })
+  combined: (title) => apiPost('/api/lookup/combined', { title }),
+  barcode: (barcode) => apiPost('/api/lookup/barcode', { barcode })
 }
 
 export const importApi = {

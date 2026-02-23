@@ -8,10 +8,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.0", 
+    "@zxing/browser": "^0.1.5",
     "chart.js": "^4.4.0",
-    "vue-chartjs": "^5.3.0"
+    "vue": "^3.4.0",
+    "vue-chartjs": "^5.3.0",
+    "vue-router": "^4.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

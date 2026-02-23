@@ -44,7 +44,7 @@
             <h1>{{ game.title }}</h1>
             <p class="text-muted">{{ game.platform_name }}</p>
           </div>
-          <div class="actions actions-compact">
+          <div class="actions actions-compact actions-toolbar">
             <router-link :to="`/edit/${game.id}`" class="btn btn-secondary btn-compact">Edit</router-link>
             <button @click="enrichCover" class="btn btn-secondary btn-compact" :disabled="enriching">
               {{ enriching ? '⏳ Fetching...' : '🖼 Enrich Cover' }}
@@ -52,9 +52,14 @@
             <button @click="checkPrice" class="btn btn-secondary btn-compact" :disabled="priceLoading">
               {{ priceLoading ? '⏳ Fetching...' : '💰 Fetch Market Price' }}
             </button>
-            <a :href="ebayUrl()" target="_blank" rel="noopener" class="btn btn-secondary btn-compact">🛒 eBay Sold</a>
-            <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="btn btn-secondary btn-compact">📈 PriceCharting</a>
-            <a :href="rawgUrl()" target="_blank" rel="noopener" class="btn btn-secondary btn-compact">🎮 RAWG</a>
+            <details class="more-menu">
+              <summary class="btn btn-secondary btn-compact">⋯ More</summary>
+              <div class="more-menu-list">
+                <a :href="ebayUrl()" target="_blank" rel="noopener" class="more-menu-link">🛒 eBay Sold</a>
+                <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="more-menu-link">📈 PriceCharting</a>
+                <a :href="rawgUrl()" target="_blank" rel="noopener" class="more-menu-link">🎮 RAWG</a>
+              </div>
+            </details>
             <button @click="deleteGame" class="btn btn-danger btn-compact">Delete</button>
           </div>
         </div>
@@ -126,7 +131,7 @@
         </div>
         <div v-if="game.description" class="notes mt-3">
           <label>Description</label>
-          <p>{{ game.description }}</p>
+          <p class="description-text" v-html="formattedDescription"></p>
         </div>
 
         <!-- Market Prices -->
@@ -162,6 +167,11 @@
           <div v-if="marketSuggestion" class="market-suggestion">
             <div v-if="marketSuggestion.source === 'pricecharting'" class="market-suggestion-text">
               📊 €{{ formatMoney(marketSuggestion.market_price) }} (PriceCharting - Loose)
+              <div v-if="marketSuggestion.matched_title" class="market-match">
+                Match: {{ marketSuggestion.matched_title }}
+                <span v-if="marketSuggestion.matched_platform"> ({{ marketSuggestion.matched_platform }})</span>
+                <span v-if="marketSuggestion.match_score != null"> · confidence {{ formatMatchScore(marketSuggestion.match_score) }}</span>
+              </div>
             </div>
             <div v-else-if="marketSuggestion.source === 'ebay'" class="market-suggestion-text">
               🛒 ~€{{ formatMoney(marketSuggestion.market_price) }}
@@ -267,6 +277,7 @@ const manualSaving = ref(false)
 const startValue = ref(null)
 const coverHasError = ref(false)
 const coverAutoFixing = ref(false)
+const coverAutoEnrichTried = ref(false)
 let chartInstance = null
 
 const latestPrice = computed(() => priceHistory.value[0] ?? null)
@@ -276,6 +287,44 @@ const currentCoverSrc = computed(() => {
   if (needsAutoCover(game.value.item_type)) return makeFallbackCoverDataUrl(game.value)
   return null
 })
+const formattedDescription = computed(() => formatDescriptionHtml(game.value?.description || ''))
+
+function decodeHtmlEntities(input) {
+  const area = document.createElement('textarea')
+  area.innerHTML = String(input || '')
+  return area.value
+}
+
+function normalizeDescriptionInput(input) {
+  let text = decodeHtmlEntities(input || '').trim()
+  if (!text) return ''
+
+  text = text.replace(
+    /<a\b[^>]*href=(["'])(https?:\/\/[^"']+)\1[^>]*>(.*?)<\/a>/gi,
+    (_m, _q, href, label) => `${(label || href).trim()} (${href.trim()})`
+  )
+  text = text.replace(/<\/?br\s*\/?>/gi, '\n')
+  return text
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function formatDescriptionHtml(input) {
+  const normalized = normalizeDescriptionInput(input)
+  if (!normalized) return ''
+
+  const escaped = escapeHtml(normalized)
+  const withBreaks = escaped.replace(/\r\n|\r|\n/g, '<br>')
+  const urlRegex = /https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)]/gi
+  return withBreaks.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`)
+}
 
 function formatChartDate(dt) {
   if (!dt) return ''
@@ -424,6 +473,13 @@ function formatMoney(value) {
   return Number.isFinite(num) ? num.toFixed(2) : '0.00'
 }
 
+function formatMatchScore(value) {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return 'n/a'
+  const percent = Math.max(0, Math.min(100, Math.round(num * 100)))
+  return `${percent}%`
+}
+
 async function checkPrice() {
   priceLoading.value = true
   priceError.value = ''
@@ -547,13 +603,42 @@ async function enrichCover() {
   }
 }
 
+function hasMissingOrFallbackCover() {
+  if (!game.value) return true
+  const url = game.value.cover_url
+  if (!url) return true
+  return isSvgDataCover(url)
+}
+
+async function tryAutoEnrichNonGameCover() {
+  if (!game.value || !needsAutoCover(game.value.item_type)) return false
+  if (coverAutoEnrichTried.value) return false
+  coverAutoEnrichTried.value = true
+
+  try {
+    const res = await gamesApi.enrich(route.params.id)
+    const enriched = res.ok ? (res.data?.cover_url || null) : null
+    if (enriched) {
+      game.value.cover_url = enriched
+      coverHasError.value = false
+      return true
+    }
+  } catch (e) {
+    console.warn('Auto enrich cover failed:', e)
+  }
+  return false
+}
+
 async function ensureNonGameCover() {
   if (!game.value || !needsAutoCover(game.value.item_type)) return
   if (coverAutoFixing.value) return
-  if (game.value.cover_url && !coverHasError.value) return
+  if (!coverHasError.value && !hasMissingOrFallbackCover()) return
 
   coverAutoFixing.value = true
   try {
+    const enriched = await tryAutoEnrichNonGameCover()
+    if (enriched) return
+
     const fallback = makeFallbackCoverDataUrl(game.value)
     if (game.value.cover_url !== fallback) {
       const saved = await saveCoverUrl(fallback)
@@ -579,6 +664,7 @@ async function loadGame() {
     const res = await gamesApi.get(route.params.id)
     if (res.ok) {
       game.value = res.data
+      coverAutoEnrichTried.value = false
       coverHasError.value = false
       if (startValue.value == null) {
         const v = Number(game.value.current_value)
@@ -616,6 +702,7 @@ async function saveCoverUrl(url) {
   const res = await gamesApi.update(route.params.id, { ...game.value, cover_url: url })
   if (res.ok) {
     game.value.cover_url = url
+    coverHasError.value = false
     return true
   }
   if (res.status !== 404) {
@@ -738,7 +825,8 @@ onMounted(async () => {
 .cover-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: rgba(15, 23, 42, 0.55);
   display: block;
 }
 
@@ -796,15 +884,68 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
-.actions-compact {
+.actions-toolbar {
+  margin-left: auto;
+  justify-content: flex-end;
+  align-items: flex-start;
+  align-content: flex-start;
+  row-gap: 0.35rem;
+  column-gap: 0.35rem;
   max-width: 760px;
 }
 
-.btn-compact {
-  min-height: 34px;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.82rem;
-  gap: 0.35rem;
+.actions-toolbar .btn-compact {
+  min-height: 28px !important;
+  padding: 0.22rem 0.5rem !important;
+  font-size: 0.72rem !important;
+  gap: 0.28rem;
+  line-height: 1.1;
+  border-radius: 0.4rem;
+  white-space: nowrap;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.more-menu {
+  position: relative;
+}
+
+.more-menu > summary {
+  list-style: none;
+}
+
+.more-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  min-width: 190px;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  z-index: 25;
+}
+
+.more-menu-link {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.78rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.35rem;
+}
+
+.more-menu-link:hover {
+  background: var(--bg-lighter);
 }
 
 .details-grid {
@@ -838,6 +979,17 @@ onMounted(async () => {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-bottom: 0.5rem;
+}
+
+.description-text {
+  white-space: normal;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.description-text :deep(a) {
+  color: #93c5fd;
+  text-decoration: underline;
 }
 
 .profit { color: var(--success); font-weight: bold; }
@@ -913,6 +1065,12 @@ onMounted(async () => {
 
 .market-suggestion-text {
   font-size: 0.9rem;
+}
+
+.market-match {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .market-suggestion-actions {

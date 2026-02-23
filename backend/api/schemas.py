@@ -7,6 +7,10 @@ class IGDBSearch(BaseModel):
     title: str
 
 
+class BarcodeLookup(BaseModel):
+    barcode: str
+
+
 class GameCreate(BaseModel):
     title: str
     platform_id: int

@@ -1,13 +1,18 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter
 
-from ..errors import not_found
-from ..schemas import IGDBSearch
-from ...database import dict_from_row, get_db
+from ..errors import bad_request, not_found
+from ..schemas import BarcodeLookup, IGDBSearch
+from ...database import dict_from_row, get_db, set_app_meta
 from ...services.lookup_service import (
+    cache_remote_cover,
     get_console_image,
+    lookup_upcitemdb_barcode,
     lookup_combined_title,
     lookup_gametdb_title,
     lookup_igdb_title,
+    normalize_barcode,
 )
 
 router = APIRouter()
@@ -26,6 +31,77 @@ async def lookup_gametdb(search: IGDBSearch):
 @router.post("/api/lookup/combined")
 async def lookup_combined(search: IGDBSearch):
     return await lookup_combined_title(search.title)
+
+
+@router.post("/api/lookup/barcode")
+async def lookup_barcode(search: BarcodeLookup):
+    normalized = normalize_barcode(search.barcode)
+    if len(normalized) < 8:
+        raise bad_request("Invalid barcode. Please scan a valid UPC/EAN code.")
+
+    with get_db() as db:
+        existing = db.execute(
+            """
+            SELECT g.id, g.title, g.platform_id, g.barcode, g.cover_url, p.name AS platform_name
+            FROM games g
+            LEFT JOIN platforms p ON g.platform_id = p.id
+            WHERE REPLACE(REPLACE(REPLACE(COALESCE(g.barcode, ''), ' ', ''), '-', ''), '.', '') = ?
+            ORDER BY g.updated_at DESC
+            LIMIT 1
+            """,
+            (normalized,),
+        ).fetchone()
+
+    existing_item = dict_from_row(existing) if existing else None
+
+    upc_lookup = await lookup_upcitemdb_barcode(normalized)
+    upc_results = upc_lookup.get("results", [])
+    upc_error = upc_lookup.get("error")
+
+    # EAN/UPC variants often differ by one leading zero.
+    if not upc_results:
+        alt = None
+        if len(normalized) == 12:
+            alt = f"0{normalized}"
+        elif len(normalized) == 13 and normalized.startswith("0"):
+            alt = normalized[1:]
+        if alt:
+            alt_lookup = await lookup_upcitemdb_barcode(alt)
+            if alt_lookup.get("results"):
+                upc_results = alt_lookup.get("results", [])
+                upc_error = alt_lookup.get("error")
+
+    title_candidates = []
+    seen_titles = set()
+    for item in upc_results:
+        title = str(item.get("title") or "").strip()
+        key = title.lower()
+        if title and key not in seen_titles:
+            title_candidates.append(title)
+            seen_titles.add(key)
+
+    lookup_title = title_candidates[0] if title_candidates else None
+    suggestions = []
+    combined_errors = {"igdb": None, "gametdb": None}
+    if lookup_title:
+        combined = await lookup_combined_title(lookup_title)
+        combined_errors = combined.get("errors", combined_errors)
+        suggestions = [*(combined.get("igdb", [])), *(combined.get("gametdb", []))]
+
+    return {
+        "barcode": search.barcode,
+        "normalized_barcode": normalized,
+        "existing": existing_item,
+        "lookup_title": lookup_title,
+        "title_candidates": title_candidates,
+        "suggestions": suggestions[:8],
+        "external_matches": upc_results,
+        "errors": {
+            "upcitemdb": upc_error,
+            "igdb": combined_errors.get("igdb"),
+            "gametdb": combined_errors.get("gametdb"),
+        },
+    }
 
 
 @router.post("/api/games/{game_id}/enrich")
@@ -60,6 +136,8 @@ async def enrich_game_cover(game_id: int):
 
     if not cover_url:
         raise not_found("No cover found")
+
+    cover_url = await cache_remote_cover(cover_url)
 
     with get_db() as db:
         db.execute(
@@ -102,6 +180,7 @@ async def enrich_all_covers(limit: int = 20):
             cover_url = get_console_image(item.get("platform_name") or item.get("title", ""))
 
         if cover_url:
+            cover_url = await cache_remote_cover(cover_url)
             with get_db() as db:
                 db.execute(
                     "UPDATE games SET cover_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -111,4 +190,11 @@ async def enrich_all_covers(limit: int = 20):
             results["success"] += 1
         else:
             results["failed"] += 1
+
+    finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    set_app_meta("last_bulk_enrich_at", finished_at)
+    set_app_meta("last_bulk_enrich_success", results["success"])
+    set_app_meta("last_bulk_enrich_failed", results["failed"])
+    set_app_meta("last_bulk_enrich_total", results["total"])
+
     return results

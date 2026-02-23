@@ -1,7 +1,9 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -25,6 +27,44 @@ class ApiSmokeTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.client.__exit__(None, None, None)
+
+    def _db_path(self) -> str:
+        url = os.environ["DATABASE_URL"]
+        if url.startswith("sqlite:///"):
+            return url.replace("sqlite:///", "", 1)
+        return url
+
+    def _insert_price_catalog(self, *, title: str, platform: str, loose_eur: float):
+        with sqlite3.connect(self._db_path()) as con:
+            con.execute(
+                """
+                INSERT INTO price_catalog
+                    (pricecharting_id, title, platform, loose_usd, cib_usd, new_usd,
+                     loose_eur, cib_eur, new_eur, page_url, scraped_at, changed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (
+                    "",
+                    title,
+                    platform,
+                    None,
+                    None,
+                    None,
+                    float(loose_eur),
+                    None,
+                    None,
+                    None,
+                ),
+            )
+            con.commit()
+
+    def _platform_by_name(self, preferred: str):
+        platforms = self.client.get("/api/platforms").json()
+        wanted = preferred.strip().lower()
+        for platform in platforms:
+            if platform["name"].strip().lower() == wanted:
+                return platform
+        return platforms[0]
 
     def test_core_routes(self):
         r = self.client.get("/")
@@ -134,6 +174,143 @@ class ApiSmokeTest(unittest.TestCase):
 
         self.client.delete(f"/api/games/{gid}")
         self.client.delete(f"/api/games/{wid}")
+
+    def test_lookup_barcode_rejects_invalid_code(self):
+        r = self.client.post("/api/lookup/barcode", json={"barcode": "123"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_lookup_barcode_returns_existing_game(self):
+        platform = self._platform_by_name("xbox one")
+        payload = {
+            "title": "Barcode Existing Test",
+            "platform_id": platform["id"],
+            "item_type": "game",
+            "barcode": "4005209025098",
+            "is_wishlist": False,
+        }
+        created = self.client.post("/api/games", json=payload)
+        self.assertEqual(created.status_code, 200)
+        game_id = created.json()["id"]
+
+        with patch(
+            "backend.api.routes.lookup.lookup_upcitemdb_barcode",
+            new=AsyncMock(return_value={"results": [], "error": None}),
+        ):
+            r = self.client.post("/api/lookup/barcode", json={"barcode": "4005209025098"})
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data.get("normalized_barcode"), "4005209025098")
+        self.assertEqual(data.get("existing", {}).get("id"), game_id)
+
+        self.client.delete(f"/api/games/{game_id}")
+
+    def test_fetch_market_price_uses_local_catalog_match(self):
+        xbox = self._platform_by_name("xbox one")
+        title = "UT Local Match Xbox One White Wireless Controller"
+        payload = {
+            "title": title,
+            "platform_id": xbox["id"],
+            "item_type": "console",
+            "is_wishlist": False,
+        }
+        created = self.client.post("/api/games", json=payload)
+        self.assertEqual(created.status_code, 200)
+        game_id = created.json()["id"]
+
+        self._insert_price_catalog(
+            title=title,
+            platform=xbox["name"].lower(),
+            loose_eur=24.49,
+        )
+
+        with (
+            patch("backend.price_tracker._fetch_pricecharting_scrape", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_ebay_market_price", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_rawg_reference", new=AsyncMock(return_value=None)),
+        ):
+            r = self.client.post(f"/api/games/{game_id}/fetch-market-price")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data.get("source"), "pricecharting")
+        self.assertAlmostEqual(float(data.get("market_price")), 24.49, places=2)
+        self.assertEqual(data.get("matched_title"), title)
+
+        history = self.client.get(f"/api/games/{game_id}/price-history")
+        self.assertEqual(history.status_code, 200)
+        entries = history.json()
+        self.assertTrue(any(e.get("source") == "pricecharting" for e in entries))
+
+        self.client.delete(f"/api/games/{game_id}")
+
+    def test_fetch_market_price_rejects_weak_local_match(self):
+        xbox = self._platform_by_name("xbox one")
+        payload = {
+            "title": "UT Non Matching Device ZXQ-771",
+            "platform_id": xbox["id"],
+            "item_type": "console",
+            "is_wishlist": False,
+        }
+        created = self.client.post("/api/games", json=payload)
+        self.assertEqual(created.status_code, 200)
+        game_id = created.json()["id"]
+
+        self._insert_price_catalog(
+            title="UT Totally Different Sports 2019",
+            platform=xbox["name"].lower(),
+            loose_eur=199.00,
+        )
+
+        with (
+            patch("backend.price_tracker._fetch_pricecharting_scrape", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_ebay_market_price", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_rawg_reference", new=AsyncMock(return_value=None)),
+        ):
+            r = self.client.post(f"/api/games/{game_id}/fetch-market-price")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("error", data)
+        self.assertNotIn("market_price", data)
+
+        self.client.delete(f"/api/games/{game_id}")
+
+    def test_fetch_market_price_prefers_same_platform_match(self):
+        xbox = self._platform_by_name("xbox one")
+        ps5 = self._platform_by_name("playstation 5")
+        shared_title = "UT Multi Platform Shared Title"
+
+        payload = {
+            "title": shared_title,
+            "platform_id": xbox["id"],
+            "item_type": "console",
+            "is_wishlist": False,
+        }
+        created = self.client.post("/api/games", json=payload)
+        self.assertEqual(created.status_code, 200)
+        game_id = created.json()["id"]
+
+        self._insert_price_catalog(
+            title=shared_title,
+            platform=ps5["name"].lower(),
+            loose_eur=77.00,
+        )
+        self._insert_price_catalog(
+            title=shared_title,
+            platform=xbox["name"].lower(),
+            loose_eur=33.00,
+        )
+
+        with (
+            patch("backend.price_tracker._fetch_pricecharting_scrape", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_ebay_market_price", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_rawg_reference", new=AsyncMock(return_value=None)),
+        ):
+            r = self.client.post(f"/api/games/{game_id}/fetch-market-price")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertAlmostEqual(float(data.get("market_price")), 33.00, places=2)
+        self.assertEqual(data.get("matched_platform"), xbox["name"].lower())
+
+        self.client.delete(f"/api/games/{game_id}")
 
 
 if __name__ == "__main__":
