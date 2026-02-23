@@ -41,7 +41,7 @@
         </select>
         <button class="btn btn-secondary" :disabled="scraping" @click="startScrape">
           <span v-if="scraping">Scraping…</span>
-          <span v-else>Scrape Prices</span>
+          <span v-else>{{ search.trim() ? 'Scrape This Search' : 'Scrape Prices' }}</span>
         </button>
         <button class="btn btn-danger-outline" :disabled="scraping" @click="clearCatalog">
           Clear
@@ -54,7 +54,11 @@
       Scraping PriceCharting catalog – this may take several minutes. You can keep using the app.
     </div>
     <div v-if="scrapeResult" class="scrape-result mb-3">
-      ✓ Scrape finished for: {{ scrapeResult.platforms.join(', ') }}
+      <span v-if="scrapeResult.targeted">
+        ✓ Targeted scrape for "{{ scrapeResult.query }}" finished
+        <span v-if="scrapeResult.error"> · {{ scrapeResult.error }}</span>
+      </span>
+      <span v-else>✓ Scrape finished for: {{ scrapeResult.platforms.join(', ') }}</span>
       <span class="scrape-kpi">
         processed {{ (scrapeResult.scraped || 0).toLocaleString() }} ·
         new {{ (scrapeResult.inserted || 0).toLocaleString() }} ·
@@ -196,6 +200,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { priceCatalogApi, gamesApi, platformsApi } from '../api'
 
 // Known platform slug mapping (mirrors backend PLATFORM_SLUGS)
@@ -247,6 +252,7 @@ const scraping = ref(false)
 const scrapeTarget = ref('all')
 const scrapeResult = ref(null)
 const lastScraped = ref('')
+const route = useRoute()
 
 let searchTimer = null
 
@@ -319,11 +325,15 @@ async function startScrape() {
   scraping.value = true
   scrapeResult.value = null
   try {
-    const res = await priceCatalogApi.scrape(scrapeTarget.value)
+    const query = search.value.trim()
+    const scrapePlatform = query
+      ? (selectedPlatform.value || (scrapeTarget.value !== 'all' ? scrapeTarget.value : 'all'))
+      : scrapeTarget.value
+    const res = await priceCatalogApi.scrape(scrapePlatform, query)
     if (res.ok && res.data) {
       scrapeResult.value = res.data
       lastScraped.value = new Date().toLocaleString('de-DE')
-      if (scrapeTarget.value === 'all') {
+      if (!query && scrapeTarget.value === 'all') {
         selectedPlatform.value = ''
       }
       await Promise.all([loadPage(1), loadPlatforms()])
@@ -418,7 +428,12 @@ async function confirmAdd() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPage(1), loadPlatforms()])
+  const routeSearch = typeof route.query.search === 'string' ? route.query.search : ''
+  const routePlatform = typeof route.query.platform === 'string' ? route.query.platform : ''
+  if (routeSearch) search.value = routeSearch
+  if (routePlatform) selectedPlatform.value = routePlatform
+
+  await Promise.all([loadPlatforms(), loadPage(1)])
   try {
     const res = await platformsApi.list()
     if (res.ok && Array.isArray(res.data)) {

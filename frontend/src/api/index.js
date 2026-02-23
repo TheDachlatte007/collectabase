@@ -7,6 +7,7 @@ export const gamesApi = {
   update: (id, payload) => apiPut(`/api/games/${id}`, payload),
   remove: (id) => apiDelete(`/api/games/${id}`),
   enrich: (id) => apiPost(`/api/games/${id}/enrich`),
+  placeholderCover: (id) => apiPost(`/api/games/${id}/cover-placeholder`),
   uploadCover: (formData) => apiPostForm('/api/upload/cover', formData)
 }
 
@@ -46,6 +47,12 @@ export const settingsApi = {
 export const priceCatalogApi = {
   search: (params = '') => apiGet(`/api/price-catalog${params}`),
   platforms: () => apiGet('/api/price-catalog/platforms'),
-  scrape: (platform = 'all') => apiPost(`/api/price-catalog/scrape?platform=${encodeURIComponent(platform)}`),
+  scrape: (platform = 'all', q = '') => {
+    const params = new URLSearchParams()
+    if (platform) params.set('platform', platform)
+    if (q) params.set('q', q)
+    const query = params.toString()
+    return apiPost(`/api/price-catalog/scrape${query ? `?${query}` : ''}`)
+  },
   clear: (platform = null) => apiDelete(`/api/price-catalog${platform ? `?platform=${encodeURIComponent(platform)}` : ''}`)
 }

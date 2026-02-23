@@ -604,12 +604,42 @@ function stopCamera() {
 
 async function startCamera() {
   try {
-    if (window.BarcodeDetector) {
-      scannerMode.value = 'native scanner'
-      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
-      scannerVideo.value.srcObject = cameraStream
-      await scannerVideo.value.play()
+    if (!window.isSecureContext && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+      scannerError.value = 'Camera requires HTTPS (or localhost).'
+      return
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      scannerError.value = 'Camera API is not available in this browser.'
+      return
+    }
 
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    })
+    scannerVideo.value.srcObject = cameraStream
+    await scannerVideo.value.play()
+
+    let supportsNative = false
+    if (window.BarcodeDetector) {
+      try {
+        if (typeof window.BarcodeDetector.getSupportedFormats === 'function') {
+          const supported = await window.BarcodeDetector.getSupportedFormats()
+          supportsNative = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'].some(f => supported.includes(f))
+        } else {
+          supportsNative = true
+        }
+      } catch {
+        supportsNative = false
+      }
+    }
+
+    if (supportsNative) {
+      scannerMode.value = 'native scanner'
       const detector = new window.BarcodeDetector({
         formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'],
       })
@@ -636,8 +666,8 @@ async function startCamera() {
     scannerMode.value = 'zxing fallback'
     const { BrowserMultiFormatReader } = await import('@zxing/browser')
     const reader = new BrowserMultiFormatReader()
-    zxingControls = await reader.decodeFromConstraints(
-      { video: { facingMode: { ideal: 'environment' } } },
+    zxingControls = await reader.decodeFromStream(
+      cameraStream,
       scannerVideo.value,
       async (result) => {
         if (!result) return
@@ -649,7 +679,7 @@ async function startCamera() {
     )
   } catch (e) {
     console.error('Scanner error:', e)
-    scannerError.value = 'Camera access denied. Please allow camera access.'
+    scannerError.value = 'Camera access denied or unavailable. Please allow camera access in Safari settings.'
   }
 }
 

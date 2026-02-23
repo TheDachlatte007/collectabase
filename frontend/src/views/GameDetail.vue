@@ -55,6 +55,10 @@
             <details class="more-menu">
               <summary class="btn btn-secondary btn-compact">⋯ More</summary>
               <div class="more-menu-list">
+                <button type="button" class="more-menu-link more-menu-btn" @click="openPriceBrowserSearch">🔎 Open in Prices</button>
+                <button type="button" class="more-menu-link more-menu-btn" @click="useConsolePlaceholder" :disabled="placeholderApplying">
+                  {{ placeholderApplying ? '⏳ Applying...' : '🖼 Use Console Placeholder' }}
+                </button>
                 <a :href="ebayUrl()" target="_blank" rel="noopener" class="more-menu-link">🛒 eBay Sold</a>
                 <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="more-menu-link">📈 PriceCharting</a>
                 <a :href="rawgUrl()" target="_blank" rel="noopener" class="more-menu-link">🎮 RAWG</a>
@@ -272,6 +276,7 @@ const priceChartEl = ref(null)
 const coverFileInput = ref(null)
 const coverUploading = ref(false)
 const coverUploadError = ref('')
+const placeholderApplying = ref(false)
 const manualEntry = ref({ loose_price: null, complete_price: null, new_price: null })
 const manualSaving = ref(false)
 const startValue = ref(null)
@@ -461,6 +466,16 @@ function rawgUrl() {
   return `https://rawg.io/search?query=${q}`
 }
 
+function openPriceBrowserSearch() {
+  if (!game.value) return
+  const query = {}
+  const title = String(game.value.title || '').trim()
+  const platform = String(game.value.platform_name || '').trim()
+  if (title) query.search = title
+  if (platform) query.platform = platform
+  router.push({ path: '/prices', query })
+}
+
 function formatDate(dt) {
   if (!dt) return ''
   const d = new Date(typeof dt === 'string' ? dt.replace(' ', 'T') : dt)
@@ -600,6 +615,30 @@ async function enrichCover() {
     notifyError('Cover enrichment failed.')
   } finally {
     enriching.value = false
+  }
+}
+
+async function useConsolePlaceholder() {
+  if (!game.value) return
+  placeholderApplying.value = true
+  try {
+    const res = await gamesApi.placeholderCover(route.params.id)
+    if (!res.ok) {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Could not apply console placeholder.')
+      return
+    }
+    const newUrl = res.data?.cover_url
+    if (newUrl) {
+      game.value.cover_url = newUrl
+      coverHasError.value = false
+    }
+    notifySuccess('Console placeholder applied.')
+  } catch (e) {
+    console.error('Placeholder apply failed:', e)
+    notifyError('Could not apply console placeholder.')
+  } finally {
+    placeholderApplying.value = false
   }
 }
 
@@ -946,6 +985,19 @@ onMounted(async () => {
 
 .more-menu-link:hover {
   background: var(--bg-lighter);
+}
+
+.more-menu-btn {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.more-menu-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .details-grid {

@@ -133,6 +133,42 @@ def _normalize_text(value: Optional[str]) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_TITLE_NOISE_TOKENS = {
+    "console",
+    "bundle",
+    "edition",
+    "model",
+    "system",
+    "with",
+    "and",
+    "the",
+    "for",
+    "new",
+    "used",
+    "wireless",
+    "controller",
+    "gamepad",
+}
+
+
+def _clean_catalog_title(value: Optional[str], platform_name: Optional[str] = None) -> str:
+    tokens = _normalize_text(value).split()
+    platform_tokens = set(_normalize_text(platform_name).split())
+
+    cleaned = []
+    for token in tokens:
+        if token in platform_tokens:
+            continue
+        if token in _TITLE_NOISE_TOKENS:
+            continue
+        if re.fullmatch(r"\d{2,4}(gb|tb)", token):
+            continue
+        if token in {"gb", "tb"}:
+            continue
+        cleaned.append(token)
+    return " ".join(cleaned).strip()
+
+
 def _catalog_match_score(query_title: str, row_title: str) -> float:
     if not query_title or not row_title:
         return 0.0
@@ -186,15 +222,32 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
     for row in rows:
         item = dict_from_row(row)
         row_norm_title = _normalize_text(item.get("title"))
-        score = _catalog_match_score(norm_title, row_norm_title)
+        row_platform = _normalize_text(item.get("platform"))
+        query_clean = _clean_catalog_title(norm_title, norm_platform)
+        row_clean = _clean_catalog_title(row_norm_title, row_platform or norm_platform)
+
+        score = max(
+            _catalog_match_score(norm_title, row_norm_title),
+            _catalog_match_score(query_clean, row_norm_title),
+            _catalog_match_score(query_clean, row_clean),
+        )
+
+        if query_clean and row_clean:
+            q_tokens = set(query_clean.split())
+            r_tokens = set(row_clean.split())
+            if q_tokens and q_tokens.issubset(r_tokens):
+                score = max(score, 0.92)
+            elif r_tokens and len(r_tokens) >= 2 and r_tokens.issubset(q_tokens):
+                score = max(score, 0.88)
+
         if norm_platform and _normalize_text(item.get("platform")) == norm_platform:
-            score += 0.08
+            score += 0.10
         if score > best_score:
             best_score = score
             best = item
 
-    # Keep threshold moderate so "Xbox One 500GB" still matches practical catalog titles.
-    if not best or best_score < 0.62:
+    # Keep threshold moderate so descriptive import titles still map to the same catalog item.
+    if not best or best_score < 0.54:
         return None
 
     loose_eur = best.get("loose_eur")
@@ -324,6 +377,7 @@ async def _fetch_pricecharting_scrape(title: str, platform_name: str):
             "loose_usd": loose_usd,
             "cib_usd": cib_usd,
             "new_usd": new_usd,
+            "page_url": product_url,
         }
     except Exception as e:
         print(f"PriceCharting scrape error for '{query}': {e}")
@@ -1016,9 +1070,82 @@ def _upsert_catalog_entries(entries: list, eur_rate: float):
     }
 
 
+def _platform_label_from_slug(slug: str) -> Optional[str]:
+    if not slug:
+        return None
+    for label, mapped_slug in PLATFORM_SLUGS.items():
+        if mapped_slug == slug:
+            return label
+    return None
+
+
+def _derive_platform_label(page_url: Optional[str]) -> Optional[str]:
+    if not page_url:
+        return None
+    m = re.search(r"/game/([^/]+)/", page_url)
+    if not m:
+        return None
+    return _platform_label_from_slug(m.group(1))
+
+
 @router.post("/api/price-catalog/scrape")
-async def scrape_catalog(platform: str = "all"):
+async def scrape_catalog(platform: str = "all", q: Optional[str] = None):
     """Scrape PriceCharting catalog for one or all platforms into price_catalog table."""
+    query = (q or "").strip()
+    if query:
+        platform_hint = None
+        if platform and platform != "all":
+            platform_hint = next(
+                (lbl for lbl, slug in PLATFORM_SLUGS.items() if slug == platform or lbl == platform),
+                None,
+            )
+            if not platform_hint:
+                raise HTTPException(status_code=400, detail=f"Unknown platform: {platform}")
+
+        scraped = await _fetch_pricecharting_scrape(query, platform_hint or "")
+        if not scraped:
+            return {
+                "scraped": 0,
+                "inserted": 0,
+                "updated": 0,
+                "unchanged": 0,
+                "deduped_in_batch": 0,
+                "duplicates_removed": 0,
+                "platforms": [platform_hint] if platform_hint else [],
+                "query": query,
+                "targeted": True,
+                "error": "No PriceCharting result found for query",
+            }
+
+        eur_rate = await get_eur_rate()
+        resolved_platform = platform_hint or _derive_platform_label(scraped.get("page_url")) or "Unknown"
+        entry = {
+            "pricecharting_id": scraped.get("pricecharting_id") or "",
+            "title": scraped.get("product_name") or query,
+            "platform": resolved_platform,
+            "loose_usd": scraped.get("loose_usd"),
+            "cib_usd": scraped.get("cib_usd"),
+            "new_usd": scraped.get("new_usd"),
+            "page_url": scraped.get("page_url") or "",
+        }
+        stats = _upsert_catalog_entries([entry], eur_rate)
+        result = {
+            "scraped": stats["processed"],
+            "inserted": stats["inserted"],
+            "updated": stats["updated"],
+            "unchanged": stats["unchanged"],
+            "deduped_in_batch": stats["deduped_in_batch"],
+            "duplicates_removed": stats["duplicates_removed"],
+            "platforms": [resolved_platform],
+            "query": query,
+            "targeted": True,
+        }
+        finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        set_app_meta("last_catalog_scrape_at", finished_at)
+        set_app_meta("last_catalog_scrape_platforms", ", ".join(result["platforms"]))
+        set_app_meta("last_catalog_scrape_total", result["scraped"])
+        return result
+
     if platform == "all":
         targets = list(PLATFORM_SLUGS.items())
     else:

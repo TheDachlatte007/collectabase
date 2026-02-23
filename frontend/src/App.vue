@@ -7,11 +7,9 @@
       <!-- Desktop: inline nav links -->
       <nav class="desktop-nav">
         <router-link to="/" active-class="" exact-active-class="active">My Games</router-link>
-        <router-link to="/wishlist">Wishlist</router-link>
         <router-link to="/stats">Stats</router-link>
         <router-link to="/prices">Prices</router-link>
-        <router-link to="/import">Import</router-link>
-        <router-link to="/settings">Settings</router-link>
+        <router-link to="/more">More</router-link>
       </nav>
 
       <router-link to="/add" class="btn btn-primary add-btn" active-class="btn-active">+ Add</router-link>
@@ -31,13 +29,6 @@
         <span>Games</span>
       </router-link>
 
-      <router-link to="/wishlist" active-class="nav-active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-        </svg>
-        <span>Wishlist</span>
-      </router-link>
-
       <router-link to="/stats" active-class="nav-active">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <line x1="18" y1="20" x2="18" y2="10"/>
@@ -55,21 +46,13 @@
         <span>Prices</span>
       </router-link>
 
-      <router-link to="/import" active-class="nav-active">
+      <router-link to="/more" active-class="nav-active">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="17 8 12 3 7 8"/>
-          <line x1="12" y1="3" x2="12" y2="15"/>
+          <circle cx="12" cy="12" r="1.5"/>
+          <circle cx="19" cy="12" r="1.5"/>
+          <circle cx="5" cy="12" r="1.5"/>
         </svg>
-        <span>Import</span>
-      </router-link>
-
-      <router-link to="/settings" active-class="nav-active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-        <span>Settings</span>
+        <span>More</span>
       </router-link>
     </nav>
   </div>

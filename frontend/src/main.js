@@ -13,6 +13,7 @@ import Import from './views/Import.vue'
 import Stats from './views/Stats.vue'
 import Settings from './views/Settings.vue'
 import PriceBrowser from './views/PriceBrowser.vue'
+import MoreMenu from './views/MoreMenu.vue'
 
 const routes = [
   { path: '/', component: GamesList },
@@ -24,6 +25,7 @@ const routes = [
   { path: '/stats', component: Stats },
   { path: '/prices', component: PriceBrowser },
   { path: '/settings', component: Settings },
+  { path: '/more', component: MoreMenu },
 ]
 
 const router = createRouter({
