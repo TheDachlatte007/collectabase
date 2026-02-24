@@ -41,6 +41,7 @@ export const priceApi = {
 
 export const settingsApi = {
   info: () => apiGet('/api/settings/info'),
+  updateSecrets: (payload) => apiPost('/api/settings/secrets', payload),
   clearCovers: () => apiPost('/api/settings/clear-covers'),
   clearDatabase: () => apiDelete('/api/database/clear'),
   bulkEnrich: (limit) => apiPost(`/api/enrich/all?limit=${limit}`)

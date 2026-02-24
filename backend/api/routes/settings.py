@@ -3,8 +3,9 @@ from pathlib import Path
 import re
 
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
-from ...database import get_app_meta_many, get_db
+from ...database import get_app_meta_many, get_db, set_app_meta
 
 router = APIRouter()
 
@@ -21,7 +22,29 @@ def _env_any(*names: str) -> str:
         value = str(lowered.get(name.lower(), "")).strip()
         if value:
             return value
+    meta_keys = [f"cfg:{name.lower()}" for name in names]
+    meta = get_app_meta_many(meta_keys)
+    for key in meta_keys:
+        value = str(meta.get(key, {}).get("value", "")).strip()
+        if value:
+            return value
     return ""
+
+
+class SecretsUpdate(BaseModel):
+    ebay_client_id: str | None = None
+    ebay_client_secret: str | None = None
+    rawg_api_key: str | None = None
+    pricecharting_token: str | None = None
+    clear: list[str] = Field(default_factory=list)
+
+
+_SECRET_FIELDS = {
+    "ebay_client_id": "cfg:ebay_client_id",
+    "ebay_client_secret": "cfg:ebay_client_secret",
+    "rawg_api_key": "cfg:rawg_api_key",
+    "pricecharting_token": "cfg:pricecharting_token",
+}
 
 
 def _human_size(size_bytes: int) -> str:
@@ -201,6 +224,32 @@ async def settings_info():
         "last_catalog_scrape_total": int(_meta_value("last_catalog_scrape_total", 0) or 0),
         **scheduler,
     }
+
+
+@router.post("/api/settings/secrets")
+async def update_secrets(payload: SecretsUpdate):
+    updated = []
+    values = {
+        "ebay_client_id": payload.ebay_client_id,
+        "ebay_client_secret": payload.ebay_client_secret,
+        "rawg_api_key": payload.rawg_api_key,
+        "pricecharting_token": payload.pricecharting_token,
+    }
+
+    for field, raw in values.items():
+        if raw is None:
+            continue
+        set_app_meta(_SECRET_FIELDS[field], str(raw).strip())
+        updated.append(field)
+
+    for field in payload.clear:
+        key = str(field or "").strip().lower()
+        if key in _SECRET_FIELDS:
+            set_app_meta(_SECRET_FIELDS[key], "")
+            if key not in updated:
+                updated.append(key)
+
+    return {"ok": True, "updated": updated}
 
 
 @router.post("/api/settings/clear-covers")

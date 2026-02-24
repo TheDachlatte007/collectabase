@@ -140,6 +140,40 @@
       </div>
     </div>
 
+    <div class="card mb-3">
+      <h3 class="mb-2">🔐 Admin Credentials</h3>
+      <p class="text-muted mb-2">
+        Save provider credentials server-side. Values are write-only in UI and are not returned by API.
+      </p>
+      <div class="secrets-grid">
+        <div class="form-group mb-0">
+          <label>eBay Client ID</label>
+          <input v-model.trim="secretsForm.ebay_client_id" type="text" autocomplete="off" placeholder="Leave empty to keep current value" />
+          <label class="clear-check"><input v-model="secretsForm.clear_ebay_client_id" type="checkbox" /> Clear stored value</label>
+        </div>
+        <div class="form-group mb-0">
+          <label>eBay Client Secret</label>
+          <input v-model.trim="secretsForm.ebay_client_secret" type="password" autocomplete="new-password" placeholder="Leave empty to keep current value" />
+          <label class="clear-check"><input v-model="secretsForm.clear_ebay_client_secret" type="checkbox" /> Clear stored value</label>
+        </div>
+        <div class="form-group mb-0">
+          <label>RAWG API Key</label>
+          <input v-model.trim="secretsForm.rawg_api_key" type="password" autocomplete="new-password" placeholder="Leave empty to keep current value" />
+          <label class="clear-check"><input v-model="secretsForm.clear_rawg_api_key" type="checkbox" /> Clear stored value</label>
+        </div>
+        <div class="form-group mb-0">
+          <label>PriceCharting Token</label>
+          <input v-model.trim="secretsForm.pricecharting_token" type="password" autocomplete="new-password" placeholder="Leave empty to keep current value" />
+          <label class="clear-check"><input v-model="secretsForm.clear_pricecharting_token" type="checkbox" /> Clear stored value</label>
+        </div>
+      </div>
+      <div class="secret-actions mt-2">
+        <button @click="saveSecrets" class="btn btn-primary" :disabled="secretsSaving">
+          {{ secretsSaving ? 'Saving…' : 'Save Credentials' }}
+        </button>
+      </div>
+    </div>
+
     <p class="section-label">Automation</p>
     <div class="card mb-3">
       <h3 class="mb-2">Scheduler Status</h3>
@@ -300,6 +334,17 @@ const priceUpdateDone = ref(false)
 const priceLimit = ref(100)
 const priceProgress = ref({ success: 0, failed: 0, total: 0, done: 0 })
 const uiPrefs = ref(loadUiPrefs())
+const secretsSaving = ref(false)
+const secretsForm = ref({
+  ebay_client_id: '',
+  ebay_client_secret: '',
+  rawg_api_key: '',
+  pricecharting_token: '',
+  clear_ebay_client_id: false,
+  clear_ebay_client_secret: false,
+  clear_rawg_api_key: false,
+  clear_pricecharting_token: false,
+})
 
 const coverCoverage = computed(() => Number(info.value.cover_coverage_pct || 0))
 const providersConfigured = computed(() => Number(info.value.providers_configured || 0))
@@ -329,6 +374,62 @@ function onThemeChange(event) {
 function onDensityChange(event) {
   const nextDensity = event?.target?.value || 'comfortable'
   uiPrefs.value = setUiPrefs({ ...uiPrefs.value, density: nextDensity })
+}
+
+function resetSecretsForm() {
+  secretsForm.value = {
+    ebay_client_id: '',
+    ebay_client_secret: '',
+    rawg_api_key: '',
+    pricecharting_token: '',
+    clear_ebay_client_id: false,
+    clear_ebay_client_secret: false,
+    clear_rawg_api_key: false,
+    clear_pricecharting_token: false,
+  }
+}
+
+async function saveSecrets() {
+  const payload = { clear: [] }
+  const fields = ['ebay_client_id', 'ebay_client_secret', 'rawg_api_key', 'pricecharting_token']
+  let changed = false
+
+  for (const field of fields) {
+    const value = String(secretsForm.value[field] || '').trim()
+    const clearFlag = Boolean(secretsForm.value[`clear_${field}`])
+    if (value) {
+      payload[field] = value
+      changed = true
+      continue
+    }
+    if (clearFlag) {
+      payload.clear.push(field)
+      changed = true
+    }
+  }
+
+  if (!changed) {
+    notifyError('No credential changes to save.')
+    return
+  }
+
+  secretsSaving.value = true
+  try {
+    const res = await settingsApi.updateSecrets(payload)
+    if (!res.ok) {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to save credentials.')
+      return
+    }
+    notifySuccess('Credentials saved server-side.')
+    resetSecretsForm()
+    await loadInfo()
+  } catch (e) {
+    console.error('Save credentials failed:', e)
+    notifyError('Failed to save credentials.')
+  } finally {
+    secretsSaving.value = false
+  }
 }
 
 function formatTimestamp(value) {
@@ -595,6 +696,26 @@ onMounted(loadInfo)
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
+}
+
+.secrets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.clear-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.secret-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .info-grid {

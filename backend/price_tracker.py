@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from .database import dict_from_row, get_db, set_app_meta
+from .database import dict_from_row, get_app_meta_many, get_db, set_app_meta
 
 router = APIRouter()
 
@@ -64,6 +64,12 @@ def _env_any(*names: str) -> Optional[str]:
     lowered = {k.lower(): v for k, v in env.items()}
     for name in names:
         value = str(lowered.get(name.lower(), "")).strip()
+        if value:
+            return value
+    meta_keys = [f"cfg:{name.lower()}" for name in names]
+    meta = get_app_meta_many(meta_keys)
+    for key in meta_keys:
+        value = str(meta.get(key, {}).get("value", "")).strip()
         if value:
             return value
     return None
