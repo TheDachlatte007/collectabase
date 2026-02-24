@@ -39,14 +39,17 @@
             {{ label }}
           </option>
         </select>
-	        <button class="btn btn-secondary" :disabled="scraping" @click="startScrape">
-	          <span v-if="scraping">Scraping…</span>
-	          <span v-else>{{ search.trim() ? 'Scrape This Search' : 'Scrape Prices' }}</span>
-	        </button>
-	        <button class="btn btn-secondary" :disabled="scraping || enrichingLibrary" @click="startLibraryEnrich">
-	          <span v-if="enrichingLibrary">Enriching…</span>
-	          <span v-else>Enrich from Library</span>
-	        </button>
+        <button class="btn btn-secondary" :disabled="scraping" @click="startScrape">
+          <span v-if="scraping">Scraping…</span>
+          <span v-else>{{ search.trim() ? 'Scrape This Search' : 'Scrape Prices' }}</span>
+        </button>
+        <button class="btn btn-secondary" :disabled="scraping || enrichingLibrary" @click="startMassScrape">
+          Mass Scrape All
+        </button>
+        <button class="btn btn-secondary" :disabled="scraping || enrichingLibrary" @click="startLibraryEnrich">
+          <span v-if="enrichingLibrary">Enriching…</span>
+          <span v-else>Enrich from Library</span>
+        </button>
 	        <button class="btn btn-danger-outline" :disabled="scraping" @click="clearCatalog">
 	          Clear
 	        </button>
@@ -350,12 +353,15 @@ function sortIndicator(field) {
   return sortOrder.value === 'asc' ? '↑' : '↓'
 }
 
-async function startScrape() {
+async function startScrape(options = {}) {
+  const forceAll = options.forceAll === true
   scraping.value = true
   scrapeResult.value = null
   try {
-    const query = search.value.trim()
-    const scrapePlatform = query
+    const query = forceAll ? '' : search.value.trim()
+    const scrapePlatform = forceAll
+      ? 'all'
+      : query
       ? (selectedPlatform.value || (scrapeTarget.value !== 'all' ? scrapeTarget.value : 'all'))
       : scrapeTarget.value
     const res = await priceCatalogApi.scrape(scrapePlatform, query)
@@ -372,6 +378,10 @@ async function startScrape() {
   } finally {
     scraping.value = false
   }
+}
+
+function startMassScrape() {
+  return startScrape({ forceAll: true })
 }
 
 async function startLibraryEnrich() {

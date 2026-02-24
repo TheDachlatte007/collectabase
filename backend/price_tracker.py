@@ -55,8 +55,15 @@ _EBAY_TOKEN_CACHE = {"token": None, "expires_at": 0.0}
 
 
 def _env_any(*names: str) -> Optional[str]:
+    env = os.environ
     for name in names:
-        value = os.getenv(name, "").strip()
+        for candidate in (name, name.lower(), name.upper()):
+            value = env.get(candidate, "").strip()
+            if value:
+                return value
+    lowered = {k.lower(): v for k, v in env.items()}
+    for name in names:
+        value = str(lowered.get(name.lower(), "")).strip()
         if value:
             return value
     return None
