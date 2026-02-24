@@ -49,6 +49,7 @@ export const settingsApi = {
 export const priceCatalogApi = {
   search: (params = '') => apiGet(`/api/price-catalog${params}`),
   platforms: () => apiGet('/api/price-catalog/platforms'),
+  enrichLibrary: (limit = 120) => apiPost(`/api/price-catalog/enrich-library?limit=${limit}`),
   scrape: (platform = 'all', q = '') => {
     const params = new URLSearchParams()
     if (platform) params.set('platform', platform)

@@ -77,8 +77,18 @@ def _pricecharting_token() -> Optional[str]:
 
 
 def _ebay_credentials():
-    client_id = _env_any("EBAY_CLIENT_ID", "EBAY_APP_ID", "EBAY_APPID")
-    client_secret = _env_any("EBAY_CLIENT_SECRET", "EBAY_SECRET", "EBAY_CLIENTSECRET")
+    client_id = _env_any(
+        "EBAY_CLIENT_ID",
+        "EBAY_APP_ID",
+        "EBAY_APPID",
+        "EBAY_CLIENTID",
+    )
+    client_secret = _env_any(
+        "EBAY_CLIENT_SECRET",
+        "EBAY_SECRET",
+        "EBAY_CLIENTSECRET",
+        "EBAY_SECRET_KEY",
+    )
     if not client_id or not client_secret:
         return None, None
     return client_id, client_secret
@@ -197,29 +207,57 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
 
     norm_platform = _normalize_text(platform_name)
 
+    title_tokens = [t for t in _clean_catalog_title(norm_title, norm_platform).split() if len(t) >= 3]
+
     try:
         with get_db() as db:
             rows = []
             if norm_platform:
-                rows = db.execute(
+                if title_tokens:
+                    sql = """
+                        SELECT *
+                        FROM price_catalog
+                        WHERE LOWER(platform) = LOWER(?)
                     """
-                    SELECT *
-                    FROM price_catalog
-                    WHERE LOWER(platform) = LOWER(?)
-                    ORDER BY scraped_at DESC
-                    LIMIT 500
-                    """,
-                    (norm_platform,),
-                ).fetchall()
+                    params = [norm_platform]
+                    for token in title_tokens[:3]:
+                        sql += " AND LOWER(title) LIKE ?"
+                        params.append(f"%{token}%")
+                    sql += " ORDER BY scraped_at DESC LIMIT 2000"
+                    rows = db.execute(sql, params).fetchall()
+                if not rows:
+                    rows = db.execute(
+                        """
+                        SELECT *
+                        FROM price_catalog
+                        WHERE LOWER(platform) = LOWER(?)
+                        ORDER BY scraped_at DESC
+                        LIMIT 3000
+                        """,
+                        (norm_platform,),
+                    ).fetchall()
             if not rows:
-                rows = db.execute(
+                if title_tokens:
+                    sql = """
+                        SELECT *
+                        FROM price_catalog
+                        WHERE 1=1
                     """
-                    SELECT *
-                    FROM price_catalog
-                    ORDER BY scraped_at DESC
-                    LIMIT 1000
-                    """
-                ).fetchall()
+                    params = []
+                    for token in title_tokens[:3]:
+                        sql += " AND LOWER(title) LIKE ?"
+                        params.append(f"%{token}%")
+                    sql += " ORDER BY scraped_at DESC LIMIT 4000"
+                    rows = db.execute(sql, params).fetchall()
+                if not rows:
+                    rows = db.execute(
+                        """
+                        SELECT *
+                        FROM price_catalog
+                        ORDER BY scraped_at DESC
+                        LIMIT 5000
+                        """
+                    ).fetchall()
     except Exception:
         # Older DBs may not yet have the price_catalog table.
         return None
@@ -706,17 +744,29 @@ async def get_price_history(game_id: int):
 async def bulk_price_update(limit: int = 100):
     """Fetch prices for up to `limit` games (only non-wishlist games)."""
     with get_db() as db:
-        rows = db.execute(
-            """
-            SELECT g.id, g.title, p.name as platform_name
-            FROM games g
-            LEFT JOIN platforms p ON g.platform_id = p.id
-            WHERE g.is_wishlist = 0 AND g.item_type = 'game'
-            ORDER BY g.id ASC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        try:
+            rows = db.execute(
+                """
+                SELECT g.id, g.title, p.name as platform_name
+                FROM games g
+                LEFT JOIN platforms p ON g.platform_id = p.id
+                WHERE g.is_wishlist = 0
+                ORDER BY g.id ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        except Exception:
+            rows = db.execute(
+                """
+                SELECT g.id, g.title, p.name as platform_name
+                FROM games g
+                LEFT JOIN platforms p ON g.platform_id = p.id
+                ORDER BY g.id ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
         games = [dict_from_row(r) for r in rows]
 
     eur_rate = await get_eur_rate()
@@ -725,6 +775,31 @@ async def bulk_price_update(limit: int = 100):
     failed = 0
 
     for game in games:
+        catalog = _lookup_local_catalog_price(game["title"], game.get("platform_name") or "")
+        if not catalog:
+            catalog = _lookup_local_catalog_price(game["title"], "")
+
+        if catalog:
+            with get_db() as db:
+                db.execute(
+                    """
+                    INSERT INTO price_history
+                        (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
+                    VALUES (?, 'pricecharting', ?, ?, ?, 1.0, ?)
+                    """,
+                    (
+                        game["id"],
+                        catalog["loose_eur"],
+                        catalog["cib_eur"],
+                        catalog["new_eur"],
+                        catalog["pricecharting_id"] or None,
+                    ),
+                )
+                db.commit()
+            success += 1
+            await asyncio.sleep(0.1)
+            continue
+
         pc = await fetch_pricecharting(game["title"], game["platform_name"] or "")
         if pc:
             with get_db() as db:
@@ -1246,6 +1321,106 @@ async def scrape_catalog(platform: str = "all", q: Optional[str] = None):
     set_app_meta("last_catalog_scrape_platforms", ", ".join(result["platforms"]))
     set_app_meta("last_catalog_scrape_total", result["scraped"])
     return result
+
+
+@router.post("/api/price-catalog/enrich-library")
+async def enrich_catalog_from_library(limit: int = 120):
+    """
+    Fill price_catalog incrementally by scraping titles already present in the local library.
+    This helps grow coverage beyond the paginated console-catalog scrape.
+    """
+    with get_db() as db:
+        try:
+            rows = db.execute(
+                """
+                SELECT g.id, g.title, p.name as platform_name
+                FROM games g
+                LEFT JOIN platforms p ON g.platform_id = p.id
+                WHERE g.is_wishlist = 0
+                ORDER BY g.updated_at DESC, g.id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        except Exception:
+            rows = db.execute(
+                """
+                SELECT g.id, g.title, p.name as platform_name
+                FROM games g
+                LEFT JOIN platforms p ON g.platform_id = p.id
+                ORDER BY g.id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+    games = [dict_from_row(r) for r in rows]
+    scanned = len(games)
+    skipped_existing = 0
+    failed = 0
+    fetched_entries = []
+
+    for game in games:
+        title = (game.get("title") or "").strip()
+        platform_name = (game.get("platform_name") or "").strip()
+        if not title:
+            continue
+
+        existing = _lookup_local_catalog_price(title, platform_name)
+        if not existing:
+            existing = _lookup_local_catalog_price(title, "")
+        if existing and float(existing.get("match_score") or 0) >= 0.9:
+            skipped_existing += 1
+            continue
+
+        scraped = await _fetch_pricecharting_scrape(title, platform_name)
+        if not scraped:
+            failed += 1
+            await asyncio.sleep(0.35)
+            continue
+
+        resolved_platform = (
+            _derive_platform_label(scraped.get("page_url"))
+            or _normalize_text(platform_name)
+            or "unknown"
+        )
+        fetched_entries.append(
+            {
+                "pricecharting_id": scraped.get("pricecharting_id") or "",
+                "title": scraped.get("product_name") or title,
+                "platform": resolved_platform,
+                "loose_usd": scraped.get("loose_usd"),
+                "cib_usd": scraped.get("cib_usd"),
+                "new_usd": scraped.get("new_usd"),
+                "page_url": scraped.get("page_url") or "",
+            }
+        )
+        await asyncio.sleep(0.5)
+
+    eur_rate = await get_eur_rate()
+    stats = _upsert_catalog_entries(fetched_entries, eur_rate)
+
+    finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    set_app_meta("last_catalog_scrape_at", finished_at)
+    set_app_meta("last_catalog_scrape_platforms", "library-enrich")
+    set_app_meta("last_catalog_scrape_total", stats["processed"])
+    set_app_meta("last_catalog_enrich_scanned", scanned)
+    set_app_meta("last_catalog_enrich_skipped_existing", skipped_existing)
+    set_app_meta("last_catalog_enrich_failed", failed)
+
+    return {
+        "library": True,
+        "scanned": scanned,
+        "skipped_existing": skipped_existing,
+        "failed": failed,
+        "fetched": len(fetched_entries),
+        "scraped": stats["processed"],
+        "inserted": stats["inserted"],
+        "updated": stats["updated"],
+        "unchanged": stats["unchanged"],
+        "deduped_in_batch": stats["deduped_in_batch"],
+        "duplicates_removed": stats["duplicates_removed"],
+    }
 
 
 @router.get("/api/price-catalog")

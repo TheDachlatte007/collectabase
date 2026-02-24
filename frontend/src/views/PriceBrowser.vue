@@ -39,35 +39,48 @@
             {{ label }}
           </option>
         </select>
-        <button class="btn btn-secondary" :disabled="scraping" @click="startScrape">
-          <span v-if="scraping">Scraping…</span>
-          <span v-else>{{ search.trim() ? 'Scrape This Search' : 'Scrape Prices' }}</span>
-        </button>
-        <button class="btn btn-danger-outline" :disabled="scraping" @click="clearCatalog">
-          Clear
-        </button>
-      </div>
-    </div>
+	        <button class="btn btn-secondary" :disabled="scraping" @click="startScrape">
+	          <span v-if="scraping">Scraping…</span>
+	          <span v-else>{{ search.trim() ? 'Scrape This Search' : 'Scrape Prices' }}</span>
+	        </button>
+	        <button class="btn btn-secondary" :disabled="scraping || enrichingLibrary" @click="startLibraryEnrich">
+	          <span v-if="enrichingLibrary">Enriching…</span>
+	          <span v-else>Enrich from Library</span>
+	        </button>
+	        <button class="btn btn-danger-outline" :disabled="scraping" @click="clearCatalog">
+	          Clear
+	        </button>
+	      </div>
+	    </div>
     <div v-if="linkedGameId" class="link-notice mb-3">
       Linked mode: selecting a row will write its prices to game #{{ linkedGameId }}.
     </div>
 
     <!-- Scrape progress message -->
-    <div v-if="scraping" class="scrape-notice mb-3">
-      Scraping PriceCharting catalog – this may take several minutes. You can keep using the app.
-    </div>
-    <div v-if="scrapeResult" class="scrape-result mb-3">
-      <span v-if="scrapeResult.targeted">
-        ✓ Targeted scrape for "{{ scrapeResult.query }}" finished
-        <span v-if="scrapeResult.error"> · {{ scrapeResult.error }}</span>
-      </span>
-      <span v-else>✓ Scrape finished for: {{ scrapeResult.platforms.join(', ') }}</span>
-      <span class="scrape-kpi">
-        processed {{ (scrapeResult.scraped || 0).toLocaleString() }} ·
-        new {{ (scrapeResult.inserted || 0).toLocaleString() }} ·
-        changed {{ (scrapeResult.updated || 0).toLocaleString() }} ·
-        unchanged {{ (scrapeResult.unchanged || 0).toLocaleString() }}
-      </span>
+	    <div v-if="scraping" class="scrape-notice mb-3">
+	      Scraping PriceCharting catalog – this may take several minutes. You can keep using the app.
+	    </div>
+	    <div v-if="scrapeResult" class="scrape-result mb-3">
+	      <span v-if="scrapeResult.library">
+	        ✓ Library enrich finished
+	      </span>
+	      <span v-if="scrapeResult.targeted">
+	        ✓ Targeted scrape for "{{ scrapeResult.query }}" finished
+	        <span v-if="scrapeResult.error"> · {{ scrapeResult.error }}</span>
+	      </span>
+	      <span v-else-if="!scrapeResult.library">✓ Scrape finished for: {{ scrapeResult.platforms.join(', ') }}</span>
+	      <span class="scrape-kpi">
+	        <template v-if="scrapeResult.library">
+	          scanned {{ (scrapeResult.scanned || 0).toLocaleString() }} ·
+	          fetched {{ (scrapeResult.fetched || 0).toLocaleString() }} ·
+	          failed {{ (scrapeResult.failed || 0).toLocaleString() }} ·
+	          skipped {{ (scrapeResult.skipped_existing || 0).toLocaleString() }} ·
+	        </template>
+	        processed {{ (scrapeResult.scraped || 0).toLocaleString() }} ·
+	        new {{ (scrapeResult.inserted || 0).toLocaleString() }} ·
+	        changed {{ (scrapeResult.updated || 0).toLocaleString() }} ·
+	        unchanged {{ (scrapeResult.unchanged || 0).toLocaleString() }}
+	      </span>
     </div>
     <div v-if="selectedPlatform" class="filter-notice mb-3">
       Filter active: showing only platform "{{ selectedPlatform }}"
@@ -211,7 +224,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { priceApi, priceCatalogApi, gamesApi, platformsApi } from '../api'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
 
@@ -261,12 +274,14 @@ const sortField = ref('title')
 const sortOrder = ref('asc')
 
 const scraping = ref(false)
+const enrichingLibrary = ref(false)
 const scrapeTarget = ref('all')
 const scrapeResult = ref(null)
 const lastScraped = ref('')
 const linkedGameId = ref(null)
 const applyLoadingId = ref(null)
 const route = useRoute()
+const router = useRouter()
 
 let searchTimer = null
 
@@ -359,6 +374,23 @@ async function startScrape() {
   }
 }
 
+async function startLibraryEnrich() {
+  enrichingLibrary.value = true
+  scrapeResult.value = null
+  try {
+    const res = await priceCatalogApi.enrichLibrary(160)
+    if (res.ok && res.data) {
+      scrapeResult.value = res.data
+      lastScraped.value = new Date().toLocaleString('de-DE')
+      await Promise.all([loadPage(1), loadPlatforms()])
+    }
+  } catch (e) {
+    console.error('Library enrich failed:', e)
+  } finally {
+    enrichingLibrary.value = false
+  }
+}
+
 async function clearCatalog() {
   if (!confirm('Delete all price catalog entries?')) return
   await priceCatalogApi.clear()
@@ -380,6 +412,10 @@ async function applyToLinkedGame(item) {
       return
     }
     notifySuccess(`Price from "${item.title}" applied to game #${gameId}.`)
+    const returnTo = typeof route.query.returnTo === 'string' ? route.query.returnTo.trim() : ''
+    if (returnTo) {
+      await router.push(returnTo)
+    }
   } catch (e) {
     console.error('Apply catalog price failed:', e)
     notifyError('Could not apply catalog price.')

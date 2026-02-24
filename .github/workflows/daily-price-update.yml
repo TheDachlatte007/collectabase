@@ -1,19 +1,29 @@
-name: Daily Price Update
+name: Scheduled Price Update
 
 on:
   schedule:
-    # Runs every day at 03:00 UTC
-    - cron: "0 3 * * *"
+    # Lightweight run every 6 hours
+    - cron: "17 */6 * * *"
+    # Daily deep scrape window (03:05 UTC)
+    - cron: "5 3 * * *"
   workflow_dispatch:
     inputs:
       limit:
         description: "Max number of games to update"
         required: false
-        default: "100"
+        default: "160"
+      enrich_limit:
+        description: "Max number of library titles for catalog enrich"
+        required: false
+        default: "160"
       scrape_platform:
         description: "Platform slug for catalog scrape (e.g. all, nintendo-switch)"
         required: false
         default: "all"
+      run_full_scrape:
+        description: "Run full platform scrape now (true/false)"
+        required: false
+        default: "false"
 
 jobs:
   update-prices:
@@ -28,7 +38,7 @@ jobs:
           if [ -z "$URL" ]; then
             URL="${{ vars.COLLECTABASE_URL }}"
           fi
-          LIMIT="${{ github.event.inputs.limit || '100' }}"
+          LIMIT="${{ github.event.inputs.limit || '160' }}"
 
           if [ -z "$URL" ]; then
             echo "COLLECTABASE_URL is not set (secret/var). Skipping."
@@ -56,6 +66,40 @@ jobs:
 
           echo "Price update completed successfully."
 
+      - name: Trigger library catalog enrich
+        run: |
+          URL="${{ secrets.COLLECTABASE_URL }}"
+          if [ -z "$URL" ]; then
+            URL="${{ vars.COLLECTABASE_URL }}"
+          fi
+          ENRICH_LIMIT="${{ github.event.inputs.enrich_limit || '160' }}"
+
+          if [ -z "$URL" ]; then
+            echo "COLLECTABASE_URL is not set (secret/var). Skipping."
+            exit 1
+          fi
+
+          echo "Calling $URL/api/price-catalog/enrich-library?limit=$ENRICH_LIMIT"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --max-time 1800 \
+            "$URL/api/price-catalog/enrich-library?limit=$ENRICH_LIMIT")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "Catalog enrich failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "Catalog enrich completed successfully."
+
       - name: Trigger incremental catalog scrape
         run: |
           URL="${{ secrets.COLLECTABASE_URL }}"
@@ -63,10 +107,23 @@ jobs:
             URL="${{ vars.COLLECTABASE_URL }}"
           fi
           SCRAPE_PLATFORM="${{ github.event.inputs.scrape_platform || 'all' }}"
+          RUN_FULL="${{ github.event.inputs.run_full_scrape || 'false' }}"
 
           if [ -z "$URL" ]; then
             echo "COLLECTABASE_URL is not set (secret/var). Skipping."
             exit 1
+          fi
+
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            CURRENT_HOUR=$(date -u +%H)
+            if [ "$CURRENT_HOUR" = "03" ]; then
+              RUN_FULL="true"
+            fi
+          fi
+
+          if [ "$RUN_FULL" != "true" ]; then
+            echo "Skipping full catalog scrape for this run."
+            exit 0
           fi
 
           echo "Calling $URL/api/price-catalog/scrape?platform=$SCRAPE_PLATFORM"

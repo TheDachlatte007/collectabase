@@ -181,6 +181,11 @@
             <span :class="`source-pill source-${latestPrice.source}`">{{ latestPrice.source }}</span>
           </div>
           <div v-if="priceError" class="price-error">{{ priceError }}</div>
+          <div v-if="priceError" class="price-catalog-help">
+            <button class="btn btn-secondary btn-sm" @click="openPriceBrowserSearch">
+              🔎 Select from Price Catalog
+            </button>
+          </div>
           <div class="start-value-row">
             <span class="text-muted">
               Start value:
@@ -544,6 +549,7 @@ function openPriceBrowserSearch() {
   if (title) query.search = title
   if (platform) query.platform = platform
   if (game.value.id != null) query.linkGame = String(game.value.id)
+  query.returnTo = `/game/${game.value.id}`
   router.push({ path: '/prices', query })
 }
 
@@ -1351,6 +1357,10 @@ onMounted(async () => {
   margin-top: 0.5rem;
   font-size: 0.85rem;
   color: #ef4444;
+}
+
+.price-catalog-help {
+  margin-top: 0.45rem;
 }
 
 .price-warning {

@@ -64,8 +64,8 @@ def _workflow_scheduler_status():
 async def settings_info():
     client_id = _env_any("IGDB_CLIENT_ID")
     pricecharting_token = _env_any("PRICECHARTING_TOKEN", "PRICE_CHARTING_TOKEN")
-    ebay_client_id = _env_any("EBAY_CLIENT_ID", "EBAY_APP_ID", "EBAY_APPID")
-    ebay_client_secret = _env_any("EBAY_CLIENT_SECRET", "EBAY_SECRET", "EBAY_CLIENTSECRET")
+    ebay_client_id = _env_any("EBAY_CLIENT_ID", "EBAY_APP_ID", "EBAY_APPID", "EBAY_CLIENTID")
+    ebay_client_secret = _env_any("EBAY_CLIENT_SECRET", "EBAY_SECRET", "EBAY_CLIENTSECRET", "EBAY_SECRET_KEY")
     rawg_key = _env_any("RAWG_API_KEY", "RAWG_KEY")
     db_path = os.getenv("DATABASE_URL", "sqlite:////app/app/data/games.db").replace("sqlite:///", "")
     try:
