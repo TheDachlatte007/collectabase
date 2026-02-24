@@ -9,6 +9,14 @@ from ...database import get_app_meta_many, get_db
 router = APIRouter()
 
 
+def _env_any(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _human_size(size_bytes: int) -> str:
     if size_bytes < 1024:
         return f"{size_bytes} B"
@@ -54,10 +62,11 @@ def _workflow_scheduler_status():
 
 @router.get("/api/settings/info")
 async def settings_info():
-    client_id = os.getenv("IGDB_CLIENT_ID")
-    pricecharting_token = os.getenv("PRICECHARTING_TOKEN")
-    ebay_client_id = os.getenv("EBAY_CLIENT_ID")
-    rawg_key = os.getenv("RAWG_API_KEY")
+    client_id = _env_any("IGDB_CLIENT_ID")
+    pricecharting_token = _env_any("PRICECHARTING_TOKEN", "PRICE_CHARTING_TOKEN")
+    ebay_client_id = _env_any("EBAY_CLIENT_ID", "EBAY_APP_ID", "EBAY_APPID")
+    ebay_client_secret = _env_any("EBAY_CLIENT_SECRET", "EBAY_SECRET", "EBAY_CLIENTSECRET")
+    rawg_key = _env_any("RAWG_API_KEY", "RAWG_KEY")
     db_path = os.getenv("DATABASE_URL", "sqlite:////app/app/data/games.db").replace("sqlite:///", "")
     try:
         db_size_bytes = os.path.getsize(db_path)
@@ -142,7 +151,7 @@ async def settings_info():
     cover_coverage_pct = round((covered_items / total_items) * 100, 1) if total_items else 0.0
     providers_configured = sum(
         1
-        for flag in [bool(client_id), bool(pricecharting_token), bool(ebay_client_id), bool(rawg_key)]
+        for flag in [bool(client_id), bool(pricecharting_token), bool(ebay_client_id and ebay_client_secret), bool(rawg_key)]
         if flag
     )
 
@@ -150,7 +159,9 @@ async def settings_info():
         "version": "1.0.0",
         "igdb_configured": bool(client_id),
         "pricecharting_configured": bool(pricecharting_token),
-        "ebay_configured": bool(ebay_client_id),
+        "ebay_configured": bool(ebay_client_id and ebay_client_secret),
+        "ebay_client_id_set": bool(ebay_client_id),
+        "ebay_client_secret_set": bool(ebay_client_secret),
         "rawg_configured": bool(rawg_key),
         "total_items": total_items,
         "game_items": game_items,

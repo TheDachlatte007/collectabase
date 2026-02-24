@@ -54,6 +54,14 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Collectabase/1.0)"}
 _EBAY_TOKEN_CACHE = {"token": None, "expires_at": 0.0}
 
 
+def _env_any(*names: str) -> Optional[str]:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return None
+
+
 async def get_eur_rate() -> float:
     """Fetch live USD->EUR rate from frankfurter.app (no key required)."""
     try:
@@ -65,21 +73,19 @@ async def get_eur_rate() -> float:
 
 
 def _pricecharting_token() -> Optional[str]:
-    token = os.getenv("PRICECHARTING_TOKEN", "").strip()
-    return token or None
+    return _env_any("PRICECHARTING_TOKEN", "PRICE_CHARTING_TOKEN")
 
 
 def _ebay_credentials():
-    client_id = os.getenv("EBAY_CLIENT_ID", "").strip()
-    client_secret = os.getenv("EBAY_CLIENT_SECRET", "").strip()
+    client_id = _env_any("EBAY_CLIENT_ID", "EBAY_APP_ID", "EBAY_APPID")
+    client_secret = _env_any("EBAY_CLIENT_SECRET", "EBAY_SECRET", "EBAY_CLIENTSECRET")
     if not client_id or not client_secret:
         return None, None
     return client_id, client_secret
 
 
 def _rawg_key() -> Optional[str]:
-    key = os.getenv("RAWG_API_KEY", "").strip()
-    return key or None
+    return _env_any("RAWG_API_KEY", "RAWG_KEY")
 
 
 def _to_eur(usd_price: Optional[float], eur_rate: float):
@@ -145,9 +151,6 @@ _TITLE_NOISE_TOKENS = {
     "for",
     "new",
     "used",
-    "wireless",
-    "controller",
-    "gamepad",
 }
 
 
@@ -194,28 +197,32 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
 
     norm_platform = _normalize_text(platform_name)
 
-    with get_db() as db:
-        rows = []
-        if norm_platform:
-            rows = db.execute(
-                """
-                SELECT *
-                FROM price_catalog
-                WHERE LOWER(platform) = LOWER(?)
-                ORDER BY scraped_at DESC
-                LIMIT 500
-                """,
-                (norm_platform,),
-            ).fetchall()
-        if not rows:
-            rows = db.execute(
-                """
-                SELECT *
-                FROM price_catalog
-                ORDER BY scraped_at DESC
-                LIMIT 1000
-                """
-            ).fetchall()
+    try:
+        with get_db() as db:
+            rows = []
+            if norm_platform:
+                rows = db.execute(
+                    """
+                    SELECT *
+                    FROM price_catalog
+                    WHERE LOWER(platform) = LOWER(?)
+                    ORDER BY scraped_at DESC
+                    LIMIT 500
+                    """,
+                    (norm_platform,),
+                ).fetchall()
+            if not rows:
+                rows = db.execute(
+                    """
+                    SELECT *
+                    FROM price_catalog
+                    ORDER BY scraped_at DESC
+                    LIMIT 1000
+                    """
+                ).fetchall()
+    except Exception:
+        # Older DBs may not yet have the price_catalog table.
+        return None
 
     best = None
     best_score = 0.0
@@ -247,7 +254,7 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
             best = item
 
     # Keep threshold moderate so descriptive import titles still map to the same catalog item.
-    if not best or best_score < 0.54:
+    if not best or best_score < 0.42:
         return None
 
     loose_eur = best.get("loose_eur")
@@ -590,6 +597,9 @@ async def fetch_market_price(game_id: int):
     rawg_enabled = _rawg_key() is not None
 
     catalog = _lookup_local_catalog_price(game["title"], game.get("platform_name") or "")
+    if not catalog:
+        # Retry without platform constraint for mismatched/legacy platform labels.
+        catalog = _lookup_local_catalog_price(game["title"], "")
     if catalog:
         with get_db() as db:
             db.execute(
@@ -710,15 +720,6 @@ async def bulk_price_update(limit: int = 100):
         games = [dict_from_row(r) for r in rows]
 
     eur_rate = await get_eur_rate()
-    token = _pricecharting_token()
-    if not token:
-        finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-        set_app_meta("last_bulk_price_update_at", finished_at)
-        set_app_meta("last_bulk_price_update_success", 0)
-        set_app_meta("last_bulk_price_update_failed", len(games))
-        set_app_meta("last_bulk_price_update_total", len(games))
-        set_app_meta("last_bulk_price_update_error", "PRICECHARTING_TOKEN not set")
-        return {"success": 0, "failed": len(games), "total": len(games), "error": "PRICECHARTING_TOKEN not set"}
 
     success = 0
     failed = 0
@@ -765,6 +766,10 @@ class ManualPriceEntry(BaseModel):
     new_price: Optional[float] = None
 
 
+class CatalogPriceApply(BaseModel):
+    catalog_id: int
+
+
 @router.post("/api/games/{game_id}/price-manual")
 async def add_manual_price(game_id: int, entry: ManualPriceEntry):
     """Save a manually entered price snapshot (source='manual')."""
@@ -784,6 +789,50 @@ async def add_manual_price(game_id: int, entry: ManualPriceEntry):
         )
         db.commit()
     return {"ok": True}
+
+
+@router.post("/api/games/{game_id}/price-from-catalog")
+async def apply_catalog_price(game_id: int, payload: CatalogPriceApply):
+    with get_db() as db:
+        game = db.execute("SELECT id FROM games WHERE id = ?", (game_id,)).fetchone()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        row = db.execute("SELECT * FROM price_catalog WHERE id = ?", (payload.catalog_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Catalog entry not found")
+        item = dict_from_row(row)
+
+        loose = item.get("loose_eur")
+        cib = item.get("cib_eur")
+        new = item.get("new_eur")
+        if loose is None and cib is None and new is None:
+            raise HTTPException(status_code=400, detail="Catalog entry has no usable prices")
+
+        db.execute(
+            """
+            INSERT INTO price_history
+                (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
+            VALUES (?, 'pricecharting', ?, ?, ?, 1.0, ?)
+            """,
+            (game_id, loose, cib, new, item.get("pricecharting_id") or None),
+        )
+
+        if loose is not None:
+            db.execute(
+                "UPDATE games SET current_value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (loose, game_id),
+            )
+
+        db.commit()
+
+    return {
+        "ok": True,
+        "market_price": loose,
+        "source": "pricecharting",
+        "matched_title": item.get("title"),
+        "matched_platform": item.get("platform"),
+    }
 
 
 # ── Price Catalog (scraped platform catalogs) ─────────────────────────────────

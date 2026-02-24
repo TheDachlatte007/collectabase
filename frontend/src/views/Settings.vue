@@ -86,7 +86,9 @@
         <div class="info-item">
           <label>eBay Market Prices</label>
           <span :class="info.ebay_configured ? 'status-ok' : 'status-warn'">
-            {{ info.ebay_configured ? '✅ configured' : '⚠️ EBAY_CLIENT_ID not set' }}
+            {{ info.ebay_configured
+              ? '✅ configured'
+              : (info.ebay_client_id_set ? '⚠️ EBAY_CLIENT_SECRET not set' : '⚠️ EBAY_CLIENT_ID not set') }}
           </span>
         </div>
         <div class="info-item">

@@ -60,10 +60,8 @@
               <button type="button" class="btn btn-secondary barcode-btn" @click="lookupBarcode" :disabled="barcodeLookupLoading || !game.barcode" title="Lookup barcode">
                 {{ barcodeLookupLoading ? '...' : '🔎' }}
               </button>
-              <button type="button" class="btn btn-secondary barcode-btn" @click="openScanner" title="Scan barcode">
-                📷
-              </button>
             </div>
+            <p class="barcode-status scanner-paused-note">Scanner paused until HTTPS is enabled.</p>
             <p v-if="barcodeLookupInfo" class="barcode-status">{{ barcodeLookupInfo }}</p>
           </div>
 
@@ -207,7 +205,7 @@
     </div>
 
     <!-- Barcode Scanner Modal -->
-    <div v-if="scannerOpen" class="scanner-overlay" @click.self="closeScanner">
+    <div v-if="scannerFeatureEnabled && scannerOpen" class="scanner-overlay" @click.self="closeScanner">
       <div class="scanner-modal">
         <div class="scanner-header">
           <span>Scan Barcode</span>
@@ -250,6 +248,7 @@ const scannerMode = ref('')
 const scannerVideo = ref(null)
 const barcodeLookupLoading = ref(false)
 const barcodeLookupInfo = ref('')
+const scannerFeatureEnabled = false
 let cameraStream = null
 let scanFrame = null
 let zxingControls = null
@@ -573,6 +572,10 @@ function saveAnyway() {
 }
 
 function openScanner() {
+  if (!scannerFeatureEnabled) {
+    notifyError('Scanner is paused until HTTPS is enabled.')
+    return
+  }
   scannerOpen.value = true
   scannerError.value = ''
   scannerMode.value = ''
@@ -604,8 +607,9 @@ function stopCamera() {
 
 async function startCamera() {
   try {
-    if (!window.isSecureContext && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
-      scannerError.value = 'Camera requires HTTPS (or localhost).'
+    const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+    if (!window.isSecureContext && !isLocalhost) {
+      scannerError.value = 'Camera requires HTTPS. Open the app via https://... or use http://localhost for local testing.'
       return
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -837,6 +841,11 @@ onUnmounted(() => {
   margin-top: 0.35rem;
   font-size: 0.78rem;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.scanner-paused-note {
+  color: #f59e0b;
 }
 
 .scanner-overlay {
@@ -918,6 +927,47 @@ onUnmounted(() => {
 }
 
 @media (max-width: 639px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .search-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-row .btn {
+    width: 100%;
+  }
+
+  .igdb-item {
+    gap: 0.75rem;
+  }
+
+  .igdb-item img {
+    width: 50px;
+    height: 68px;
+    flex-shrink: 0;
+  }
+
+  .igdb-item strong,
+  .igdb-item p {
+    overflow-wrap: anywhere;
+  }
+
+  .duplicate-warning .flex {
+    flex-direction: column;
+  }
+
+  .duplicate-warning .btn {
+    width: 100%;
+  }
+
+  .duplicate-warning span {
+    overflow-wrap: anywhere;
+  }
+
   .barcode-btn {
     min-width: 38px;
     padding: 0.35rem 0.45rem;

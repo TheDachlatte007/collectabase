@@ -17,7 +17,8 @@ export const platformsApi = {
 
 export const lookupApi = {
   combined: (title) => apiPost('/api/lookup/combined', { title }),
-  barcode: (barcode) => apiPost('/api/lookup/barcode', { barcode })
+  barcode: (barcode) => apiPost('/api/lookup/barcode', { barcode }),
+  consoleFallbacks: () => apiGet('/api/console-fallbacks')
 }
 
 export const importApi = {
@@ -34,6 +35,7 @@ export const priceApi = {
   check: (id) => apiPost(`/api/games/${id}/fetch-market-price`),
   history: (id) => apiGet(`/api/games/${id}/price-history`),
   manual: (id, payload) => apiPost(`/api/games/${id}/price-manual`, payload),
+  applyCatalog: (id, catalogId) => apiPost(`/api/games/${id}/price-from-catalog`, { catalog_id: catalogId }),
   bulk: (limit) => apiPost(`/api/prices/update-all?limit=${limit}`)
 }
 

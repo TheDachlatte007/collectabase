@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter
 
@@ -12,10 +14,18 @@ from ...services.lookup_service import (
     lookup_combined_title,
     lookup_gametdb_title,
     lookup_igdb_title,
+    make_console_placeholder_data_url,
     normalize_barcode,
 )
 
 router = APIRouter()
+FALLBACKS_DIR = Path(__file__).resolve().parents[2] / "static" / "console-fallbacks"
+
+
+def _placeholder_query(item: dict) -> str:
+    platform = str(item.get("platform_name") or "").strip()
+    title = str(item.get("title") or "").strip()
+    return " ".join([part for part in [platform, title] if part]).strip()
 
 
 def _normalize_text(value: str) -> str:
@@ -48,6 +58,30 @@ def _should_use_console_placeholder(item: dict) -> bool:
         return True
 
     return False
+
+
+@router.get("/api/console-fallbacks")
+async def list_console_fallbacks():
+    if not FALLBACKS_DIR.is_dir():
+        return {"items": []}
+
+    allowed_ext = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"}
+    items = []
+    for entry in FALLBACKS_DIR.iterdir():
+        if not entry.is_file():
+            continue
+        if entry.suffix.lower() not in allowed_ext:
+            continue
+        items.append(
+            {
+                "filename": entry.name,
+                "name": entry.stem.replace("-", " ").strip(),
+                "url": f"/console-fallbacks/{quote(entry.name)}",
+            }
+        )
+
+    items.sort(key=lambda x: x["filename"].lower())
+    return {"items": items}
 
 
 @router.post("/api/lookup/igdb")
@@ -153,7 +187,7 @@ async def enrich_game_cover(game_id: int):
 
     cover_url = None
     if _should_use_console_placeholder(game):
-        cover_url = get_console_image(game.get("platform_name") or game.get("title", ""))
+        cover_url = get_console_image(_placeholder_query(game))
 
     igdb = await lookup_igdb_title(game["title"])
     igdb_results = igdb.get("results", [])
@@ -167,12 +201,14 @@ async def enrich_game_cover(game_id: int):
             cover_url = gametdb_results[0]["cover_url"]
 
     if not cover_url and _should_use_console_placeholder(game):
-        cover_url = get_console_image(game.get("platform_name") or game.get("title", ""))
+        cover_url = get_console_image(_placeholder_query(game))
 
     if not cover_url:
         raise not_found("No cover found")
 
     cover_url = await cache_remote_cover(cover_url)
+    if isinstance(cover_url, str) and cover_url.startswith(("http://", "https://")):
+        cover_url = make_console_placeholder_data_url(game.get("platform_name") or game.get("title", ""))
 
     with get_db() as db:
         db.execute(
@@ -198,11 +234,13 @@ async def set_console_placeholder_cover(game_id: int):
             raise not_found("Game not found")
         item = dict_from_row(row)
 
-    cover_url = get_console_image(item.get("platform_name") or item.get("title", ""))
+    cover_url = get_console_image(_placeholder_query(item))
     if not cover_url:
         raise not_found("No console placeholder available for this item")
 
     cover_url = await cache_remote_cover(cover_url)
+    if isinstance(cover_url, str) and cover_url.startswith(("http://", "https://")):
+        cover_url = make_console_placeholder_data_url(item.get("platform_name") or item.get("title", ""))
     with get_db() as db:
         db.execute(
             "UPDATE games SET cover_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -230,7 +268,7 @@ async def enrich_all_covers(limit: int = 20):
     for item in items:
         cover_url = None
         if _should_use_console_placeholder(item):
-            cover_url = get_console_image(item.get("platform_name") or item.get("title", ""))
+            cover_url = get_console_image(_placeholder_query(item))
 
         igdb = await lookup_igdb_title(item["title"])
         igdb_results = igdb.get("results", [])
@@ -244,10 +282,12 @@ async def enrich_all_covers(limit: int = 20):
                 cover_url = gametdb_results[0]["cover_url"]
 
         if not cover_url and _should_use_console_placeholder(item):
-            cover_url = get_console_image(item.get("platform_name") or item.get("title", ""))
+            cover_url = get_console_image(_placeholder_query(item))
 
         if cover_url:
             cover_url = await cache_remote_cover(cover_url)
+            if isinstance(cover_url, str) and cover_url.startswith(("http://", "https://")):
+                cover_url = make_console_placeholder_data_url(item.get("platform_name") or item.get("title", ""))
             with get_db() as db:
                 db.execute(
                     "UPDATE games SET cover_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",

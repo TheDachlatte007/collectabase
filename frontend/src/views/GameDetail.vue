@@ -31,9 +31,29 @@
             style="display:none"
             @change="onCoverFileSelected"
           />
-          <button class="btn btn-secondary cover-upload-btn" @click="coverFileInput.click()" :disabled="coverUploading">
-            {{ coverUploading ? '⏳ Uploading...' : '📷 Upload Photo' }}
-          </button>
+          <details ref="coverUploadMenu" class="cover-upload-menu">
+            <summary class="btn btn-secondary cover-upload-btn" :class="{ disabled: coverUploading }">
+              {{ coverUploading ? '⏳ Uploading...' : '📷 Cover Actions' }}
+            </summary>
+            <div class="cover-upload-menu-list">
+              <button
+                type="button"
+                class="cover-upload-menu-item"
+                @click="triggerCoverUpload"
+                :disabled="coverUploading"
+              >
+                📷 Upload Photo
+              </button>
+              <button
+                type="button"
+                class="cover-upload-menu-item"
+                @click="openCoverGallery"
+                :disabled="coverUploading"
+              >
+                🖼 Galerie anschauen
+              </button>
+            </div>
+          </details>
           <span v-if="coverUploadError" class="cover-upload-error">{{ coverUploadError }}</span>
         </div>
       </div>
@@ -239,13 +259,45 @@
         </div>
       </div>
     </div>
+
+    <div v-if="coverGalleryOpen" class="cover-gallery-backdrop" @click.self="closeCoverGallery">
+      <div class="cover-gallery-modal card">
+        <div class="cover-gallery-header">
+          <strong>Console Gallery</strong>
+          <button type="button" class="cover-gallery-close" @click="closeCoverGallery">✕</button>
+        </div>
+        <input
+          v-model.trim="coverGalleryFilter"
+          class="search-input cover-gallery-search"
+          placeholder="Filter gallery..."
+        />
+        <div v-if="coverGalleryLoading" class="text-muted">Loading gallery...</div>
+        <div v-else-if="coverGalleryError" class="cover-upload-error">{{ coverGalleryError }}</div>
+        <div v-else-if="filteredCoverGalleryItems.length === 0" class="text-muted">
+          No images found.
+        </div>
+        <div v-else class="cover-gallery-grid">
+          <button
+            v-for="item in filteredCoverGalleryItems"
+            :key="item.url"
+            type="button"
+            class="cover-gallery-item"
+            @click="applyGalleryCover(item.url)"
+            :disabled="coverGalleryApplying"
+          >
+            <img :src="item.url" :alt="item.name || item.filename || 'Cover image'" loading="lazy" />
+            <span>{{ item.name || item.filename }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { gamesApi, priceApi } from '../api'
+import { gamesApi, lookupApi, priceApi } from '../api'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
 import { coverEmoji, isSvgDataCover, makeFallbackCoverDataUrl, needsAutoCover } from '../utils/coverFallback'
 import {
@@ -274,9 +326,16 @@ const rawgReference = ref(null)
 const settingSuggestedValue = ref(false)
 const priceChartEl = ref(null)
 const coverFileInput = ref(null)
+const coverUploadMenu = ref(null)
 const coverUploading = ref(false)
 const coverUploadError = ref('')
 const placeholderApplying = ref(false)
+const coverGalleryOpen = ref(false)
+const coverGalleryLoading = ref(false)
+const coverGalleryApplying = ref(false)
+const coverGalleryError = ref('')
+const coverGalleryFilter = ref('')
+const coverGalleryItems = ref([])
 const manualEntry = ref({ loose_price: null, complete_price: null, new_price: null })
 const manualSaving = ref(false)
 const startValue = ref(null)
@@ -293,6 +352,13 @@ const currentCoverSrc = computed(() => {
   return null
 })
 const formattedDescription = computed(() => formatDescriptionHtml(game.value?.description || ''))
+const filteredCoverGalleryItems = computed(() => {
+  const query = normalizeSearch(coverGalleryFilter.value)
+  if (!query) return coverGalleryItems.value
+  return coverGalleryItems.value.filter((item) => {
+    return normalizeSearch(item.name).includes(query) || normalizeSearch(item.filename).includes(query)
+  })
+})
 
 function decodeHtmlEntities(input) {
   const area = document.createElement('textarea')
@@ -310,6 +376,10 @@ function normalizeDescriptionInput(input) {
   )
   text = text.replace(/<\/?br\s*\/?>/gi, '\n')
   return text
+}
+
+function normalizeSearch(value) {
+  return String(value || '').trim().toLowerCase()
 }
 
 function escapeHtml(value) {
@@ -470,9 +540,10 @@ function openPriceBrowserSearch() {
   if (!game.value) return
   const query = {}
   const title = String(game.value.title || '').trim()
-  const platform = String(game.value.platform_name || '').trim()
+  const platform = String(game.value.platform_name || '').trim().toLowerCase()
   if (title) query.search = title
   if (platform) query.platform = platform
+  if (game.value.id != null) query.linkGame = String(game.value.id)
   router.push({ path: '/prices', query })
 }
 
@@ -751,6 +822,64 @@ async function saveCoverUrl(url) {
   return false
 }
 
+function closeCoverUploadMenu() {
+  if (coverUploadMenu.value?.open) {
+    coverUploadMenu.value.open = false
+  }
+}
+
+function triggerCoverUpload() {
+  if (coverUploading.value) return
+  closeCoverUploadMenu()
+  coverFileInput.value?.click()
+}
+
+async function loadCoverGallery() {
+  coverGalleryLoading.value = true
+  coverGalleryError.value = ''
+  try {
+    const res = await lookupApi.consoleFallbacks()
+    if (!res.ok) {
+      const detail = res.data?.detail
+      coverGalleryError.value = detail?.message || detail || 'Could not load gallery.'
+      return
+    }
+    const items = Array.isArray(res.data?.items) ? res.data.items : []
+    coverGalleryItems.value = items
+  } catch (e) {
+    console.error('Failed loading console gallery:', e)
+    coverGalleryError.value = 'Could not load gallery.'
+  } finally {
+    coverGalleryLoading.value = false
+  }
+}
+
+async function openCoverGallery() {
+  closeCoverUploadMenu()
+  coverGalleryOpen.value = true
+  if (!coverGalleryItems.value.length) {
+    await loadCoverGallery()
+  }
+}
+
+function closeCoverGallery() {
+  coverGalleryOpen.value = false
+}
+
+async function applyGalleryCover(url) {
+  if (!url || coverGalleryApplying.value) return
+  coverGalleryApplying.value = true
+  try {
+    const saved = await saveCoverUrl(url)
+    if (saved) {
+      notifySuccess('Cover set from gallery.')
+      closeCoverGallery()
+    }
+  } finally {
+    coverGalleryApplying.value = false
+  }
+}
+
 async function onCoverFileSelected(event) {
   const file = event.target.files?.[0]
   if (!file) return
@@ -898,6 +1027,60 @@ onMounted(async () => {
   width: 100%;
 }
 
+.cover-upload-menu {
+  position: relative;
+}
+
+.cover-upload-menu > summary {
+  list-style: none;
+}
+
+.cover-upload-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cover-upload-menu > summary.disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.cover-upload-menu-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 20;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cover-upload-menu-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+  padding: 0.42rem 0.5rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+}
+
+.cover-upload-menu-item:hover {
+  background: var(--bg-lighter);
+}
+
+.cover-upload-menu-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .cover-upload-error {
   font-size: 0.8rem;
   color: #ef4444;
@@ -998,6 +1181,75 @@ onMounted(async () => {
 .more-menu-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.cover-gallery-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.72);
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.cover-gallery-modal {
+  width: min(940px, 96vw);
+  max-height: min(85vh, 900px);
+  overflow: auto;
+}
+
+.cover-gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.cover-gallery-close {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 0.35rem;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.cover-gallery-search {
+  margin-bottom: 0.75rem;
+}
+
+.cover-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.65rem;
+}
+
+.cover-gallery-item {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 0.45rem;
+  overflow: hidden;
+  text-align: left;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+.cover-gallery-item img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.cover-gallery-item span {
+  font-size: 0.72rem;
+  padding: 0.45rem 0.5rem 0.5rem;
+  word-break: break-word;
 }
 
 .details-grid {

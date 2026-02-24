@@ -48,6 +48,9 @@
         </button>
       </div>
     </div>
+    <div v-if="linkedGameId" class="link-notice mb-3">
+      Linked mode: selecting a row will write its prices to game #{{ linkedGameId }}.
+    </div>
 
     <!-- Scrape progress message -->
     <div v-if="scraping" class="scrape-notice mb-3">
@@ -130,7 +133,15 @@
                 <span v-else class="text-muted">–</span>
               </td>
               <td class="col-actions">
-                <button class="btn btn-sm btn-primary" @click="openAddModal(item)">+ Add</button>
+                <button
+                  v-if="linkedGameId"
+                  class="btn btn-sm btn-primary"
+                  :disabled="applyLoadingId === item.id"
+                  @click="applyToLinkedGame(item)"
+                >
+                  {{ applyLoadingId === item.id ? 'Applying…' : 'Use Price' }}
+                </button>
+                <button v-else class="btn btn-sm btn-primary" @click="openAddModal(item)">+ Add</button>
               </td>
             </tr>
           </tbody>
@@ -201,7 +212,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { priceCatalogApi, gamesApi, platformsApi } from '../api'
+import { priceApi, priceCatalogApi, gamesApi, platformsApi } from '../api'
+import { notifyError, notifySuccess } from '../composables/useNotifications'
 
 // Known platform slug mapping (mirrors backend PLATFORM_SLUGS)
 const platformSlugs = [
@@ -252,6 +264,8 @@ const scraping = ref(false)
 const scrapeTarget = ref('all')
 const scrapeResult = ref(null)
 const lastScraped = ref('')
+const linkedGameId = ref(null)
+const applyLoadingId = ref(null)
 const route = useRoute()
 
 let searchTimer = null
@@ -354,6 +368,26 @@ async function clearCatalog() {
   scrapeResult.value = null
 }
 
+async function applyToLinkedGame(item) {
+  const gameId = Number(linkedGameId.value)
+  if (!Number.isFinite(gameId) || gameId <= 0) return
+  applyLoadingId.value = item.id
+  try {
+    const applyRes = await priceApi.applyCatalog(gameId, item.id)
+    if (!applyRes.ok) {
+      const detail = applyRes.data?.detail
+      notifyError(detail?.message || detail || 'Could not apply catalog price.')
+      return
+    }
+    notifySuccess(`Price from "${item.title}" applied to game #${gameId}.`)
+  } catch (e) {
+    console.error('Apply catalog price failed:', e)
+    notifyError('Could not apply catalog price.')
+  } finally {
+    applyLoadingId.value = null
+  }
+}
+
 // ── Quick-Add Modal ───────────────────────────────────────────────────────────
 const backendPlatforms = ref([])
 
@@ -429,11 +463,19 @@ async function confirmAdd() {
 
 onMounted(async () => {
   const routeSearch = typeof route.query.search === 'string' ? route.query.search : ''
-  const routePlatform = typeof route.query.platform === 'string' ? route.query.platform : ''
+  const routePlatform = typeof route.query.platform === 'string' ? route.query.platform.trim() : ''
+  const routeLinkGame = typeof route.query.linkGame === 'string' ? route.query.linkGame : ''
   if (routeSearch) search.value = routeSearch
-  if (routePlatform) selectedPlatform.value = routePlatform
+  if (routeLinkGame && Number.isFinite(Number(routeLinkGame))) {
+    linkedGameId.value = Number(routeLinkGame)
+  }
 
-  await Promise.all([loadPlatforms(), loadPage(1)])
+  await loadPlatforms()
+  if (routePlatform) {
+    const matched = platforms.value.find(p => String(p).toLowerCase() === routePlatform.toLowerCase())
+    selectedPlatform.value = matched || routePlatform
+  }
+  await loadPage(1)
   try {
     const res = await platformsApi.list()
     if (res.ok && Array.isArray(res.data)) {
@@ -524,6 +566,15 @@ onMounted(async () => {
 .filter-notice {
   font-size: 0.85rem;
   color: #fbbf24;
+}
+
+.link-notice {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  color: #bfdbfe;
 }
 
 /* ── Table ── */

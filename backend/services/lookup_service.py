@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import time
 import xml.etree.ElementTree as ET
+from urllib.parse import quote
 from urllib.parse import urlparse
 
 import httpx
@@ -48,6 +49,43 @@ CONSOLE_IMAGE_MAP = {
     "sega game gear": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Game-Gear-Handheld.jpg/280px-Game-Gear-Handheld.jpg",
 }
 
+CONSOLE_LOCAL_SLUG_MAP = {
+    "nes": "nes",
+    "nintendo entertainment system": "nes",
+    "snes": "snes",
+    "super nintendo": "snes",
+    "super nintendo entertainment system": "snes",
+    "nintendo 64": "nintendo-64",
+    "n64": "nintendo-64",
+    "gamecube": "gamecube",
+    "nintendo gamecube": "gamecube",
+    "wii": "wii",
+    "wii u": "wii-u",
+    "nintendo switch": "nintendo-switch",
+    "nintendo switch 2": "nintendo-switch-2",
+    "game boy": "game-boy",
+    "game boy color": "game-boy-color",
+    "game boy advance": "game-boy-advance",
+    "nintendo ds": "nintendo-ds",
+    "nintendo 3ds": "nintendo-3ds",
+    "playstation": "playstation",
+    "playstation 2": "playstation-2",
+    "playstation 3": "playstation-3",
+    "playstation 4": "playstation-4",
+    "playstation 5": "playstation-5",
+    "psp": "psp",
+    "ps vita": "ps-vita",
+    "xbox": "xbox",
+    "xbox 360": "xbox-360",
+    "xbox one": "xbox-one",
+    "xbox series x/s": "xbox-series-xs",
+    "sega master system": "sega-master-system",
+    "sega genesis/mega drive": "sega-genesis",
+    "sega saturn": "sega-saturn",
+    "sega dreamcast": "sega-dreamcast",
+    "sega game gear": "sega-game-gear",
+}
+
 _igdb_token_cache = {"token": None, "expires_at": 0.0, "client_id": None}
 CONSOLE_ALIASES = {
     "ps5": "playstation 5",
@@ -73,6 +111,66 @@ def _normalize_platform_name(value: str) -> str:
 _NORMALIZED_CONSOLE_IMAGE_MAP = {
     _normalize_platform_name(k): v for k, v in CONSOLE_IMAGE_MAP.items()
 }
+_NORMALIZED_CONSOLE_LOCAL_SLUG_MAP = {
+    _normalize_platform_name(k): v for k, v in CONSOLE_LOCAL_SLUG_MAP.items()
+}
+
+
+def _console_fallback_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "static" / "console-fallbacks"
+
+
+def _local_console_image(slug: str, context_text: str = "") -> Optional[str]:
+    if not slug:
+        return None
+    base = _console_fallback_dir()
+    allowed_ext = {".png", ".jpg", ".jpeg", ".webp"}
+
+    # 1) Exact file wins.
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        filename = f"{slug}{ext}"
+        if (base / filename).exists():
+            return f"/console-fallbacks/{filename}"
+
+    # 2) Variant files like "<slug>-slim.png" or "<slug>-controller.png".
+    normalized_context = _normalize_platform_name(context_text)
+    context_tokens = set(normalized_context.split())
+    variant_candidates = []
+    for path in base.glob(f"{slug}-*"):
+        if path.suffix.lower() not in allowed_ext:
+            continue
+        stem = path.stem.lower()
+        prefix = f"{slug}-"
+        if not stem.startswith(prefix):
+            continue
+        suffix = stem[len(prefix):]
+        if not suffix:
+            continue
+        tokens = [t for t in suffix.split("-") if t]
+        if not tokens:
+            continue
+        score = 0
+        if context_tokens and all(t in context_tokens for t in tokens):
+            score = len(tokens) + 10
+        elif context_tokens and any(t in context_tokens for t in tokens):
+            score = 1
+        variant_candidates.append((score, path.name, tokens))
+
+    if not variant_candidates:
+        return None
+
+    variant_candidates.sort(key=lambda item: (item[0], len(item[1])), reverse=True)
+    best_score, best_name, best_tokens = variant_candidates[0]
+    if best_score > 0:
+        return f"/console-fallbacks/{best_name}"
+
+    # If no token matched, avoid using controller art for plain console titles.
+    for _score, filename, tokens in variant_candidates:
+        if "controller" not in tokens:
+            return f"/console-fallbacks/{filename}"
+    # Final fallback if only controller variant exists.
+    return f"/console-fallbacks/{best_name}"
+    return None
 
 
 def get_console_image(platform_name: str) -> Optional[str]:
@@ -80,18 +178,34 @@ def get_console_image(platform_name: str) -> Optional[str]:
     if not normalized:
         return None
 
+    direct_slug = _NORMALIZED_CONSOLE_LOCAL_SLUG_MAP.get(normalized)
+    if direct_slug:
+        local_image = _local_console_image(direct_slug, normalized)
+        if local_image:
+            return local_image
+
     direct = _NORMALIZED_CONSOLE_IMAGE_MAP.get(normalized)
     if direct:
         return direct
 
     alias_target = CONSOLE_ALIASES.get(normalized)
     if alias_target:
+        alias_slug = _NORMALIZED_CONSOLE_LOCAL_SLUG_MAP.get(_normalize_platform_name(alias_target))
+        if alias_slug:
+            local_image = _local_console_image(alias_slug, normalized)
+            if local_image:
+                return local_image
         alias_url = _NORMALIZED_CONSOLE_IMAGE_MAP.get(_normalize_platform_name(alias_target))
         if alias_url:
             return alias_url
 
     for alias, target in CONSOLE_ALIASES.items():
         if alias in normalized:
+            alias_slug = _NORMALIZED_CONSOLE_LOCAL_SLUG_MAP.get(_normalize_platform_name(target))
+            if alias_slug:
+                local_image = _local_console_image(alias_slug, normalized)
+                if local_image:
+                    return local_image
             alias_url = _NORMALIZED_CONSOLE_IMAGE_MAP.get(_normalize_platform_name(target))
             if alias_url:
                 return alias_url
@@ -99,9 +213,32 @@ def get_console_image(platform_name: str) -> Optional[str]:
     # Fallback: fuzzy containment (e.g. "xbox one 500gb", "xbox one wireless controller")
     for key, url in sorted(_NORMALIZED_CONSOLE_IMAGE_MAP.items(), key=lambda kv: len(kv[0]), reverse=True):
         if key and key in normalized:
+            slug = _NORMALIZED_CONSOLE_LOCAL_SLUG_MAP.get(key)
+            if slug:
+                local_image = _local_console_image(slug, normalized)
+                if local_image:
+                    return local_image
             return url
 
     return None
+
+
+def make_console_placeholder_data_url(title: str) -> str:
+    safe_title = str(title or "Console").strip()[:34]
+    safe_title = re.sub(r"[<>&\"']", "", safe_title) or "Console"
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">'
+        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0%" stop-color="#1d4ed8"/><stop offset="100%" stop-color="#1e293b"/>'
+        '</linearGradient></defs>'
+        '<rect width="600" height="800" fill="url(#g)"/>'
+        '<rect x="34" y="34" width="532" height="732" rx="22" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>'
+        '<text x="300" y="170" text-anchor="middle" fill="#f8fafc" font-size="84">🖥️</text>'
+        '<text x="300" y="250" text-anchor="middle" fill="#f1f5f9" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">CONSOLE</text>'
+        f'<text x="300" y="322" text-anchor="middle" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">{safe_title}</text>'
+        '</svg>'
+    )
+    return f"data:image/svg+xml;utf8,{quote(svg)}"
 
 
 def _uploads_dir() -> str:

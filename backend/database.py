@@ -2,17 +2,18 @@ import os
 import sqlite3
 from contextlib import contextmanager
 
-_db_url = os.getenv("DATABASE_URL", "sqlite:////app/app/data/games.db")
-if _db_url.startswith("sqlite:////"):
-    DATABASE_PATH = _db_url.replace("sqlite:////", "/")
-else:
-    DATABASE_PATH = _db_url.replace("sqlite:///", "")
+
+def _database_path() -> str:
+    db_url = os.getenv("DATABASE_URL", "sqlite:////app/app/data/games.db")
+    if db_url.startswith("sqlite:////"):
+        return db_url.replace("sqlite:////", "/")
+    return db_url.replace("sqlite:///", "")
 
 
 @contextmanager
 def get_db():
     """Context manager for sqlite connections."""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(_database_path())
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -53,7 +54,8 @@ def get_app_meta_many(keys):
 
 def init_db():
     """Initialize schema and default platform seed."""
-    os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+    database_path = _database_path()
+    os.makedirs(os.path.dirname(database_path), exist_ok=True)
 
     with get_db() as db:
         db.execute(
