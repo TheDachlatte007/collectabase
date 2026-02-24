@@ -7,6 +7,7 @@ import statistics
 import time
 from difflib import SequenceMatcher
 from typing import Optional
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -363,28 +364,81 @@ async def _fetch_pricecharting_api(title: str, platform_name: str, token: str):
 
 async def _fetch_pricecharting_scrape(title: str, platform_name: str):
     """Scrape PriceCharting without an API token by parsing HTML pages."""
+    title = (title or "").strip()
+    platform_name = (platform_name or "").strip()
     query = " ".join(part for part in [title, platform_name] if part).strip()
     search_url = "https://www.pricecharting.com/search-products"
-    search_params = {"q": query, "type": "videogames"}
+    normalized_platform = _normalize_text(platform_name)
+    normalized_title = _normalize_text(title)
+    normalized_query = _normalize_text(query)
+
+    attempts = []
+    seen_attempts = set()
+
+    def add_attempt(q: str, search_type: Optional[str]):
+        cleaned_q = (q or "").strip()
+        if not cleaned_q:
+            return
+        key = (cleaned_q.lower(), (search_type or "").lower())
+        if key in seen_attempts:
+            return
+        seen_attempts.add(key)
+        attempts.append((cleaned_q, search_type))
+
+    # "prices" catches accessories/hardware more often than videogames.
+    add_attempt(query, "prices")
+    add_attempt(query, "videogames")
+    add_attempt(title, "prices")
+    add_attempt(title, "videogames")
+    add_attempt(query, None)
+    add_attempt(title, None)
 
     try:
         async with httpx.AsyncClient(timeout=15, headers=HEADERS, follow_redirects=True) as client:
-            # Step 1: Search for the game
-            search_res = await client.get(search_url, params=search_params)
-            print(f"PriceCharting scrape search ({search_res.status_code}) for '{query}'")
-            if search_res.status_code >= 400:
-                return None
-
-            soup = BeautifulSoup(search_res.text, "html.parser")
-
-            # Find the first result link matching /game/...
             product_link = None
-            for a in soup.select("a[href^='/game/']"):
-                href = a.get("href", "")
-                # Skip non-game links (e.g. /game-type)
-                parts = href.strip("/").split("/")
-                if len(parts) >= 3 and parts[0] == "game":
-                    product_link = href
+            selected_query = query
+
+            for attempt_query, search_type in attempts:
+                params = {"q": attempt_query}
+                if search_type:
+                    params["type"] = search_type
+                search_res = await client.get(search_url, params=params)
+                print(
+                    f"PriceCharting scrape search ({search_res.status_code}) for "
+                    f"'{attempt_query}' type='{search_type or 'default'}'"
+                )
+                if search_res.status_code >= 400:
+                    continue
+
+                soup = BeautifulSoup(search_res.text, "html.parser")
+                best_link = None
+                best_score = -1.0
+
+                for a in soup.select("a[href^='/game/']"):
+                    href = a.get("href", "")
+                    parts = href.strip("/").split("/")
+                    if len(parts) < 3 or parts[0] != "game":
+                        continue
+
+                    text = _normalize_text(a.get_text(" ", strip=True))
+                    score = 0.0
+                    if normalized_query and text:
+                        score = max(
+                            score,
+                            _catalog_match_score(normalized_query, text),
+                            _catalog_match_score(normalized_title or normalized_query, text),
+                        )
+                    if normalized_platform and normalized_platform in _normalize_text(href):
+                        score += 0.08
+                    if text and normalized_title and normalized_title in text:
+                        score = max(score, 0.9)
+                    if score > best_score:
+                        best_score = score
+                        best_link = href
+
+                if best_link:
+                    product_link = best_link
+                    selected_query = attempt_query
                     break
 
             if not product_link:
@@ -406,14 +460,19 @@ async def _fetch_pricecharting_scrape(title: str, platform_name: str):
         product_soup = BeautifulSoup(product_res.text, "html.parser")
 
         # Extract product name from page title or h1
-        product_name = query
+        product_name = selected_query or query
         h1 = product_soup.select_one("h1#product_name, h1.chart_title")
         if h1:
             product_name = h1.get_text(strip=True)
 
         # Extract prices by element ID
         def get_price(element_id: str) -> Optional[float]:
-            el = product_soup.select_one(f"#{element_id} .price, #{element_id}")
+            el = product_soup.select_one(
+                f"#{element_id} .price, "
+                f"#{element_id}, "
+                f"td.{element_id} .js-price, "
+                f"td.{element_id}"
+            )
             if el:
                 # Try span.price first, then the element itself
                 span = el.select_one("span.price") or el.select_one(".price")
@@ -753,6 +812,26 @@ async def get_price_history(game_id: int):
         return [dict_from_row(r) for r in rows]
 
 
+@router.delete("/api/games/{game_id}/price-history/{entry_id}")
+async def delete_price_history_entry(game_id: int, entry_id: int):
+    """Delete a manual price entry. Automatic provider entries stay immutable."""
+    with get_db() as db:
+        row = db.execute(
+            "SELECT id, game_id, source FROM price_history WHERE id = ?",
+            (entry_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Price history entry not found")
+        item = dict_from_row(row)
+        if int(item["game_id"]) != int(game_id):
+            raise HTTPException(status_code=404, detail="Price history entry not found for this game")
+        if (item.get("source") or "").strip().lower() != "manual":
+            raise HTTPException(status_code=400, detail="Only manual entries can be deleted")
+        db.execute("DELETE FROM price_history WHERE id = ?", (entry_id,))
+        db.commit()
+    return {"ok": True}
+
+
 @router.post("/api/prices/update-all")
 async def bulk_price_update(limit: int = 100):
     """Fetch prices for up to `limit` games (only non-wishlist games)."""
@@ -926,13 +1005,27 @@ async def apply_catalog_price(game_id: int, payload: CatalogPriceApply):
 # ── Price Catalog (scraped platform catalogs) ─────────────────────────────────
 
 
-async def _fetch_with_retry(client: httpx.AsyncClient, url: str, params: dict, attempts: int = 3):
+async def _fetch_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    params: Optional[dict] = None,
+    data: Optional[dict] = None,
+    method: str = "GET",
+    attempts: int = 3,
+):
     response = None
+    request_method = (method or "GET").upper()
     for attempt in range(1, attempts + 1):
         try:
-            response = await client.get(url, params=params)
+            if request_method == "POST":
+                response = await client.post(url, params=params, data=data)
+            else:
+                response = await client.get(url, params=params)
         except Exception as e:
-            print(f"Catalog request error {url} params={params} attempt={attempt}: {e}")
+            print(
+                f"Catalog request error method={request_method} {url} params={params} "
+                f"data={data} attempt={attempt}: {e}"
+            )
             if attempt < attempts:
                 await asyncio.sleep(1.0 * attempt)
                 continue
@@ -941,7 +1034,10 @@ async def _fetch_with_retry(client: httpx.AsyncClient, url: str, params: dict, a
         if response.status_code < 400:
             return response
 
-        print(f"Catalog request HTTP {response.status_code} for {url} params={params} attempt={attempt}")
+        print(
+            f"Catalog request HTTP {response.status_code} for method={request_method} "
+            f"{url} params={params} data={data} attempt={attempt}"
+        )
         if response.status_code in (429, 500, 502, 503, 504) and attempt < attempts:
             await asyncio.sleep(1.0 * attempt)
             continue
@@ -955,15 +1051,28 @@ async def scrape_platform_catalog(platform_slug: str, platform_label: str) -> li
     base_url = f"https://www.pricecharting.com/console/{platform_slug}"
     previous_signature = None
     page_size_hint = None
+    seen_cursors = set()
+    request_method = "GET"
+    request_params = {"sort": "title", "order": "asc"}
+    request_data = None
 
     async with httpx.AsyncClient(timeout=20, headers=HEADERS, follow_redirects=True) as client:
-        for page in range(1, 121):  # safety cap
-            params = {"sort": "title", "order": "asc", "page": str(page)}
-            res = await _fetch_with_retry(client, base_url, params=params, attempts=3)
+        for page in range(1, 401):  # safety cap
+            res = await _fetch_with_retry(
+                client,
+                base_url,
+                params=request_params,
+                data=request_data,
+                method=request_method,
+                attempts=3,
+            )
             if res is None:
                 break
 
-            print(f"Catalog scrape {platform_slug} page {page}: HTTP {res.status_code}")
+            print(
+                f"Catalog scrape {platform_slug} page {page} ({request_method}): "
+                f"HTTP {res.status_code}"
+            )
             if res.status_code >= 400:
                 break
 
@@ -990,17 +1099,21 @@ async def scrape_platform_catalog(platform_slug: str, platform_label: str) -> li
                 pc_id = pc_id_match.group(1) if pc_id_match else ""
                 page_url = f"https://www.pricecharting.com{href}" if href else ""
 
-                # Prices – cells have class loose_price / cib_price / new_price
-                def cell_price(cls):
-                    td = row.select_one(f"td.{cls}")
-                    if not td:
-                        return None
-                    span = td.select_one("span.price") or td
-                    return _parse_usd_price(span.get_text(strip=True))
+                # Prices: legacy classes vary between used/loose and cib/complete.
+                def cell_price(*classes):
+                    for cls in classes:
+                        td = row.select_one(f"td.{cls}")
+                        if not td:
+                            continue
+                        span = td.select_one("span.price, span.js-price") or td
+                        parsed = _parse_usd_price(span.get_text(strip=True))
+                        if parsed is not None:
+                            return parsed
+                    return None
 
-                loose_usd = cell_price("loose_price")
-                cib_usd   = cell_price("cib_price")
-                new_usd   = cell_price("new_price")
+                loose_usd = cell_price("used_price", "loose_price")
+                cib_usd = cell_price("cib_price", "complete_price")
+                new_usd = cell_price("new_price")
 
                 if title and (loose_usd is not None or cib_usd is not None):
                     page_entries.append({
@@ -1030,8 +1143,36 @@ async def scrape_platform_catalog(platform_slug: str, platform_label: str) -> li
             entries.extend(page_entries)
             print(f"  → {len(page_entries)} games collected (total so far: {len(entries)})")
 
+            next_form = soup.select_one("form.next_page.js-next-page, form.next_page")
+            if not next_form:
+                break
+
+            next_payload = {}
+            for inp in next_form.select("input[name]"):
+                name = (inp.get("name") or "").strip()
+                if not name:
+                    continue
+                next_payload[name] = (inp.get("value") or "").strip()
+
+            cursor = next_payload.get("cursor", "")
+            if not cursor or cursor in seen_cursors:
+                break
+            seen_cursors.add(cursor)
+
+            request_method = (next_form.get("method") or "POST").upper()
+            if request_method == "GET":
+                request_params = next_payload
+                request_data = None
+            else:
+                request_params = None
+                request_data = next_payload
+
+            action = (next_form.get("action") or "").strip()
+            if action:
+                base_url = urljoin(base_url, action)
+
             if page_size_hint and len(page_entries) < max(10, page_size_hint):
-                # Likely the last page
+                # likely last chunk already
                 break
 
             await asyncio.sleep(1.1)  # be polite between pages

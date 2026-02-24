@@ -35,6 +35,7 @@ export const priceApi = {
   check: (id) => apiPost(`/api/games/${id}/fetch-market-price`),
   history: (id) => apiGet(`/api/games/${id}/price-history`),
   manual: (id, payload) => apiPost(`/api/games/${id}/price-manual`, payload),
+  deleteHistory: (id, entryId) => apiDelete(`/api/games/${id}/price-history/${entryId}`),
   applyCatalog: (id, catalogId) => apiPost(`/api/games/${id}/price-from-catalog`, { catalog_id: catalogId }),
   bulk: (limit) => apiPost(`/api/prices/update-all?limit=${limit}`)
 }

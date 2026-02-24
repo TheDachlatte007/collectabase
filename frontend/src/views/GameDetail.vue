@@ -261,6 +261,29 @@
               </button>
             </div>
           </div>
+
+          <div v-if="priceHistory.length" class="price-history-list mt-3">
+            <div class="manual-entry-label">Recent Entries</div>
+            <div
+              v-for="entry in recentPriceEntries"
+              :key="entry.id"
+              class="price-history-row"
+            >
+              <div class="price-history-main">
+                <span class="price-history-date">{{ formatDate(entry.fetched_at) }}</span>
+                <span :class="`source-pill source-${entry.source}`">{{ entry.source }}</span>
+                <span class="price-history-value">{{ entryDisplayValue(entry) }}</span>
+              </div>
+              <button
+                v-if="isManualEntry(entry)"
+                class="btn btn-secondary btn-sm"
+                :disabled="deletingEntryId === entry.id"
+                @click="removeManualEntry(entry)"
+              >
+                {{ deletingEntryId === entry.id ? 'Removing…' : 'Remove' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -343,6 +366,7 @@ const coverGalleryFilter = ref('')
 const coverGalleryItems = ref([])
 const manualEntry = ref({ loose_price: null, complete_price: null, new_price: null })
 const manualSaving = ref(false)
+const deletingEntryId = ref(null)
 const startValue = ref(null)
 const coverHasError = ref(false)
 const coverAutoFixing = ref(false)
@@ -350,6 +374,7 @@ const coverAutoEnrichTried = ref(false)
 let chartInstance = null
 
 const latestPrice = computed(() => priceHistory.value[0] ?? null)
+const recentPriceEntries = computed(() => priceHistory.value.slice(0, 10))
 const currentCoverSrc = computed(() => {
   if (!game.value) return null
   if (game.value.cover_url && !coverHasError.value) return game.value.cover_url
@@ -570,6 +595,18 @@ function formatMatchScore(value) {
   if (!Number.isFinite(num)) return 'n/a'
   const percent = Math.max(0, Math.min(100, Math.round(num * 100)))
   return `${percent}%`
+}
+
+function isManualEntry(entry) {
+  return (entry?.source || '').toLowerCase() === 'manual'
+}
+
+function entryDisplayValue(entry) {
+  if (!entry) return '—'
+  if (entry.loose_price != null) return `Loose €${formatMoney(entry.loose_price)}`
+  if (entry.complete_price != null) return `CIB €${formatMoney(entry.complete_price)}`
+  if (entry.new_price != null) return `New €${formatMoney(entry.new_price)}`
+  return '—'
 }
 
 async function checkPrice() {
@@ -943,6 +980,28 @@ async function addManualEntry() {
     notifyError('Failed to save manual entry.')
   } finally {
     manualSaving.value = false
+  }
+}
+
+async function removeManualEntry(entry) {
+  if (!entry?.id || !isManualEntry(entry)) return
+  if (!confirm('Delete this manual price entry?')) return
+
+  deletingEntryId.value = entry.id
+  try {
+    const res = await priceApi.deleteHistory(route.params.id, entry.id)
+    if (!res.ok) {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to delete manual entry.')
+      return
+    }
+    notifySuccess('Manual price entry removed.')
+    await loadPriceHistory()
+  } catch (e) {
+    console.error('Failed to delete manual entry:', e)
+    notifyError('Failed to delete manual entry.')
+  } finally {
+    deletingEntryId.value = null
   }
 }
 
@@ -1479,5 +1538,40 @@ onMounted(async () => {
   width: 90px;
   padding: 0.35rem 0.5rem;
   font-size: 0.9rem;
+}
+
+.price-history-list {
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+  padding-top: 0.75rem;
+}
+
+.price-history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px dashed var(--border, rgba(255,255,255,0.08));
+}
+
+.price-history-row:last-child {
+  border-bottom: 0;
+}
+
+.price-history-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.price-history-date {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.price-history-value {
+  font-size: 0.85rem;
 }
 </style>

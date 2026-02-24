@@ -14,6 +14,7 @@ from ...services.lookup_service import (
     lookup_combined_title,
     lookup_gametdb_title,
     lookup_igdb_title,
+    lookup_rawg_title,
     make_console_placeholder_data_url,
     normalize_barcode,
 )
@@ -94,6 +95,11 @@ async def lookup_gametdb(search: IGDBSearch):
     return await lookup_gametdb_title(search.title)
 
 
+@router.post("/api/lookup/rawg")
+async def lookup_rawg(search: IGDBSearch):
+    return await lookup_rawg_title(search.title)
+
+
 @router.post("/api/lookup/combined")
 async def lookup_combined(search: IGDBSearch):
     return await lookup_combined_title(search.title)
@@ -148,11 +154,15 @@ async def lookup_barcode(search: BarcodeLookup):
 
     lookup_title = title_candidates[0] if title_candidates else None
     suggestions = []
-    combined_errors = {"igdb": None, "gametdb": None}
+    combined_errors = {"igdb": None, "rawg": None, "gametdb": None}
     if lookup_title:
         combined = await lookup_combined_title(lookup_title)
         combined_errors = combined.get("errors", combined_errors)
-        suggestions = [*(combined.get("igdb", [])), *(combined.get("gametdb", []))]
+        suggestions = combined.get("results", []) or [
+            *(combined.get("igdb", [])),
+            *(combined.get("rawg", [])),
+            *(combined.get("gametdb", [])),
+        ]
 
     return {
         "barcode": search.barcode,
@@ -165,6 +175,7 @@ async def lookup_barcode(search: BarcodeLookup):
         "errors": {
             "upcitemdb": upc_error,
             "igdb": combined_errors.get("igdb"),
+            "rawg": combined_errors.get("rawg"),
             "gametdb": combined_errors.get("gametdb"),
         },
     }

@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 import hashlib
 import mimetypes
@@ -5,11 +6,14 @@ import os
 from pathlib import Path
 import re
 import time
+from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from urllib.parse import urlparse
 
 import httpx
+
+from ..database import get_app_meta_many
 
 
 CONSOLE_IMAGE_MAP = {
@@ -114,6 +118,38 @@ _NORMALIZED_CONSOLE_IMAGE_MAP = {
 _NORMALIZED_CONSOLE_LOCAL_SLUG_MAP = {
     _normalize_platform_name(k): v for k, v in CONSOLE_LOCAL_SLUG_MAP.items()
 }
+
+
+def _env_any(*names: str) -> str:
+    env = os.environ
+    for name in names:
+        for candidate in (name, name.lower(), name.upper()):
+            value = env.get(candidate, "").strip()
+            if value:
+                return value
+
+    lowered = {k.lower(): v for k, v in env.items()}
+    for name in names:
+        value = str(lowered.get(name.lower(), "")).strip()
+        if value:
+            return value
+
+    meta_keys = [f"cfg:{name.lower()}" for name in names]
+    meta = get_app_meta_many(meta_keys)
+    for key in meta_keys:
+        value = str(meta.get(key, {}).get("value", "")).strip()
+        if value:
+            return value
+    return ""
+
+
+def _to_iso_date(value: Optional[int]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).date().isoformat()
+    except Exception:
+        return None
 
 
 def _console_fallback_dir() -> Path:
@@ -304,8 +340,8 @@ async def cache_remote_cover(url: Optional[str]) -> Optional[str]:
 
 
 async def lookup_igdb_title(title: str):
-    client_id = os.getenv("IGDB_CLIENT_ID")
-    client_secret = os.getenv("IGDB_CLIENT_SECRET")
+    client_id = _env_any("IGDB_CLIENT_ID")
+    client_secret = _env_any("IGDB_CLIENT_SECRET")
     if not client_id or not client_secret:
         return {"error": "IGDB credentials not configured", "results": []}
 
@@ -342,11 +378,13 @@ async def lookup_igdb_title(title: str):
             query = (
                 f'search "{title}"; fields '
                 "name,first_release_date,genres.name,platforms.name,cover.url,summary,"
-                "involved_companies.company.name; limit 5;"
+                "involved_companies.company.name; limit 8;"
             )
             games_response = await client.post(
                 "https://api.igdb.com/v4/games", headers=headers, content=query
             )
+            if games_response.status_code >= 400:
+                return {"error": f"igdb_status_{games_response.status_code}", "results": []}
             games = games_response.json()
             results = []
             for game in games:
@@ -365,7 +403,7 @@ async def lookup_igdb_title(title: str):
                         "source": "igdb",
                         "igdb_id": game.get("id"),
                         "title": game.get("name"),
-                        "release_date": game.get("first_release_date"),
+                        "release_date": _to_iso_date(game.get("first_release_date")),
                         "genre": ", ".join([g.get("name", "") for g in game.get("genres", [])]),
                         "platforms": [p.get("name", "") for p in game.get("platforms", [])],
                         "cover_url": ("https:" + raw_url.replace("t_thumb", "t_cover_big")) if raw_url else None,
@@ -381,18 +419,18 @@ async def lookup_igdb_title(title: str):
 
 async def lookup_gametdb_title(title: str):
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=12) as client:
             response = await client.get(
                 "https://www.gametdb.com/api.php",
                 params={"xml": 1, "lang": "EN", "name": title, "region": "EN"},
                 headers={"User-Agent": "Collectabase/1.0"},
             )
             if response.status_code != 200:
-                return {"results": []}
+                return {"results": [], "error": f"gametdb_status_{response.status_code}"}
 
             root = ET.fromstring(response.text)
             results = []
-            for game in root.findall(".//game")[:5]:
+            for game in root.findall(".//game")[:8]:
                 game_id = game.findtext("id", "")
                 platform_elem = game.findtext("type", "")
                 title_text = game.findtext('locale[@lang="EN"]/title') or game.findtext("title", "")
@@ -414,19 +452,102 @@ async def lookup_gametdb_title(title: str):
                         else None,
                     }
                 )
-            return {"results": results}
+            return {"results": results, "error": None}
     except Exception as e:
         return {"error": str(e), "results": []}
 
 
+async def lookup_rawg_title(title: str):
+    key = _env_any("RAWG_API_KEY", "RAWG_KEY")
+    if not key:
+        return {"error": "RAWG key not configured", "results": []}
+
+    try:
+        async with httpx.AsyncClient(timeout=12, headers={"User-Agent": "Collectabase/1.0"}) as client:
+            response = await client.get(
+                "https://api.rawg.io/api/games",
+                params={
+                    "key": key,
+                    "search": title,
+                    "search_precise": "true",
+                    "page_size": 8,
+                },
+            )
+        if response.status_code >= 400:
+            return {"error": f"rawg_status_{response.status_code}", "results": []}
+
+        payload = response.json() if response.content else {}
+        games = payload.get("results", []) if isinstance(payload, dict) else []
+        results = []
+        for game in games[:8]:
+            rawg_id = game.get("id")
+            slug = game.get("slug")
+            platforms = []
+            for platform in game.get("platforms", []):
+                name = ((platform or {}).get("platform") or {}).get("name")
+                if name:
+                    platforms.append(name)
+            genres = ", ".join([g.get("name", "") for g in game.get("genres", []) if g.get("name")])
+            results.append(
+                {
+                    "source": "rawg",
+                    "rawg_id": rawg_id,
+                    "title": game.get("name"),
+                    "release_date": game.get("released"),
+                    "genre": genres,
+                    "platforms": platforms,
+                    "cover_url": game.get("background_image"),
+                    "rawg_url": f"https://rawg.io/games/{slug}" if slug else None,
+                }
+            )
+        return {"results": results, "error": None}
+    except Exception as e:
+        return {"error": str(e), "results": []}
+
+
+def _merge_lookup_results(*result_lists):
+    merged = []
+    seen = set()
+    for results in result_lists:
+        for item in results:
+            title_key = _normalize_platform_name(item.get("title") or "")
+            source_key = _normalize_platform_name(item.get("source") or "")
+            if not title_key:
+                continue
+            platform_text = ""
+            platforms = item.get("platforms")
+            if isinstance(platforms, list) and platforms:
+                platform_text = " ".join(str(p) for p in platforms if p)
+            elif item.get("platform"):
+                platform_text = str(item.get("platform"))
+            platform_key = _normalize_platform_name(platform_text)
+            key = (title_key, source_key, platform_key)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+    return merged
+
+
 async def lookup_combined_title(title: str):
-    igdb = await lookup_igdb_title(title)
-    gametdb = await lookup_gametdb_title(title)
+    igdb, rawg, gametdb = await asyncio.gather(
+        lookup_igdb_title(title),
+        lookup_rawg_title(title),
+        lookup_gametdb_title(title),
+    )
+    merged = _merge_lookup_results(
+        igdb.get("results", []),
+        rawg.get("results", []),
+        gametdb.get("results", []),
+    )
     return {
+        "results": merged[:18],
         "igdb": igdb.get("results", []),
+        "rawg": rawg.get("results", []),
         "gametdb": gametdb.get("results", []),
         "errors": {
             "igdb": igdb.get("error"),
+            "rawg": rawg.get("error"),
             "gametdb": gametdb.get("error"),
         },
     }

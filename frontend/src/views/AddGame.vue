@@ -3,25 +3,42 @@
     <h1 class="mb-3">{{ isEditMode ? 'Edit Game' : 'Add Game' }}</h1>
 
     <div class="form-layout">
-      <!-- IGDB Search -->
+      <!-- Metadata Search -->
       <div class="card mb-3">
-        <h3>Search IGDB (optional)</h3>
+        <h3>Search Metadata (IGDB / RAWG / GameTDB)</h3>
         <div class="flex gap-2 mb-2 search-row">
           <input v-model="igdbSearch" placeholder="Search by title..." @keyup.enter="searchIgdb" />
           <button @click="searchIgdb" class="btn btn-secondary" style="flex-shrink:0" :disabled="igdbLoading">
             {{ igdbLoading ? 'Searching...' : 'Search' }}
           </button>
         </div>
+        <div v-if="igdbResults.length > 0" class="search-toolbar">
+          <select v-model="sourceFilter" class="filter-select source-filter">
+            <option v-for="opt in sourceOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+          <span class="text-muted result-count">{{ rankedResults.length }} results</span>
+        </div>
         <div v-if="igdbResults.length === 0 && igdbSearch && !igdbLoading" class="text-muted mt-2">
           No results found
         </div>
-        <div v-for="result in igdbResults" :key="result.igdb_id || result.gametdb_id" 
-            class="igdb-item" @click="fillFromIgdb(result)">
-        <img v-if="result.cover_url" :src="result.cover_url" />
-        <div>
-          <strong>{{ result.title }}</strong>
-          <p class="text-muted">{{ result.platforms?.join(', ') || result.platform }}</p>
-          <span class="source-badge">{{ result.source === 'gametdb' ? '🖼️ GameTDB' : '🎮 IGDB' }}</span>
+        <div v-else-if="igdbResults.length > 0 && rankedResults.length === 0 && !igdbLoading" class="text-muted mt-2">
+          No results for the selected source
+        </div>
+        <div v-if="providerErrorText" class="text-muted mt-2">
+          {{ providerErrorText }}
+        </div>
+        <div
+          v-for="entry in rankedResults"
+          :key="entry.key"
+          class="igdb-item"
+          @click="fillFromIgdb(entry.result)"
+        >
+        <div class="result-score">{{ entry.scorePercent }}%</div>
+        <img v-if="entry.result.cover_url" :src="entry.result.cover_url" />
+        <div class="result-meta">
+          <strong>{{ entry.result.title }}</strong>
+          <p class="text-muted">{{ entry.result.platforms?.join(', ') || entry.result.platform }}</p>
+          <span class="source-badge">{{ sourceLabel(entry.result.source) }}</span>
         </div>
       </div>
       </div>
@@ -223,7 +240,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { gamesApi, lookupApi, platformsApi } from '../api'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
@@ -235,6 +252,8 @@ const saving = ref(false)
 const igdbSearch = ref('')
 const igdbResults = ref([])
 const igdbLoading = ref(false)
+const searchErrors = ref({ igdb: null, rawg: null, gametdb: null })
+const sourceFilter = ref('all')
 const isEditMode = ref(false)
 const editId = ref(null)
 const coverFileInput = ref(null)
@@ -252,6 +271,56 @@ const scannerFeatureEnabled = false
 let cameraStream = null
 let scanFrame = null
 let zxingControls = null
+
+const providerErrorText = computed(() => {
+  const entries = Object.entries(searchErrors.value || {}).filter(([, value]) => !!value)
+  if (!entries.length) return ''
+  return `Some providers are unavailable: ${entries.map(([key, value]) => `${key.toUpperCase()} (${value})`).join(' · ')}`
+})
+
+const sourceCounts = computed(() => {
+  const counts = { igdb: 0, rawg: 0, gametdb: 0 }
+  for (const item of igdbResults.value) {
+    const key = String(item?.source || '').toLowerCase()
+    if (key in counts) counts[key] += 1
+  }
+  return counts
+})
+
+const sourceOptions = computed(() => [
+  { value: 'all', label: `All Sources (${igdbResults.value.length})` },
+  { value: 'igdb', label: `IGDB (${sourceCounts.value.igdb})` },
+  { value: 'rawg', label: `RAWG (${sourceCounts.value.rawg})` },
+  { value: 'gametdb', label: `GameTDB (${sourceCounts.value.gametdb})` },
+])
+
+const selectedPlatformName = computed(() => {
+  const id = Number(game.value.platform_id)
+  if (!Number.isFinite(id) || id <= 0) return ''
+  const match = platforms.value.find(p => Number(p.id) === id)
+  return match?.name || ''
+})
+
+const rankedResults = computed(() => {
+  const filter = String(sourceFilter.value || 'all').toLowerCase()
+  const q = normalizeText(igdbSearch.value || game.value.title || '')
+  const p = normalizeText(selectedPlatformName.value)
+  return igdbResults.value
+    .filter(item => filter === 'all' || normalizeText(item?.source) === filter)
+    .map(item => {
+      const score = scoreResult(item, q, p)
+      return {
+        key: item?.igdb_id || item?.rawg_id || item?.gametdb_id || `${item?.source || 'unknown'}-${item?.title || ''}-${item?.cover_url || ''}`,
+        result: item,
+        score,
+        scorePercent: Math.max(1, Math.min(99, Math.round(score * 100))),
+      }
+    })
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return String(a.result?.title || '').localeCompare(String(b.result?.title || ''))
+    })
+})
 
 const game = ref({
   title: '',
@@ -322,19 +391,81 @@ async function loadGame(id) {
 async function searchIgdb() {
   if (!igdbSearch.value) return
   igdbLoading.value = true
+  sourceFilter.value = 'all'
+  searchErrors.value = { igdb: null, rawg: null, gametdb: null }
   try {
     const res = await lookupApi.combined(igdbSearch.value)
     const data = res.data || {}
-    igdbResults.value = data.results || [
+    igdbResults.value = (data.results && Array.isArray(data.results) ? data.results : [
       ...(data.igdb || []),
+      ...(data.rawg || []),
       ...(data.gametdb || [])
-    ]
+    ]).slice(0, 18)
+    searchErrors.value = data.errors || searchErrors.value
   } catch (e) {
     console.error('Search failed:', e)
     notifyError('Search failed.')
   } finally {
     igdbLoading.value = false
   }
+}
+
+function sourceLabel(source) {
+  const normalized = String(source || '').toLowerCase()
+  if (normalized === 'gametdb') return '🖼️ GameTDB'
+  if (normalized === 'rawg') return '🎮 RAWG'
+  return '🎮 IGDB'
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function scoreResult(item, normalizedQuery, normalizedPlatform) {
+  const title = normalizeText(item?.title)
+  if (!title) return 0
+
+  let titleScore = 0.35
+  if (normalizedQuery) {
+    if (title === normalizedQuery) {
+      titleScore = 1
+    } else if (title.includes(normalizedQuery) || normalizedQuery.includes(title)) {
+      titleScore = 0.9
+    } else {
+      const qTokens = normalizedQuery.split(' ').filter(Boolean)
+      const tTokens = title.split(' ').filter(Boolean)
+      const overlap = qTokens.length
+        ? qTokens.filter(token => tTokens.includes(token)).length / qTokens.length
+        : 0
+      titleScore = 0.45 + overlap * 0.45
+    }
+  }
+
+  let platformScore = 0
+  if (normalizedPlatform) {
+    const rawPlatforms = Array.isArray(item?.platforms) ? item.platforms.join(' ') : (item?.platform || '')
+    const platformText = normalizeText(rawPlatforms)
+    if (platformText) {
+      if (platformText.includes(normalizedPlatform) || normalizedPlatform.includes(platformText)) {
+        platformScore = 0.2
+      } else {
+        const pTokens = normalizedPlatform.split(' ').filter(Boolean)
+        const tTokens = platformText.split(' ').filter(Boolean)
+        const overlap = pTokens.length
+          ? pTokens.filter(token => tTokens.includes(token)).length / pTokens.length
+          : 0
+        platformScore = overlap * 0.18
+      }
+    }
+  }
+
+  const coverBonus = item?.cover_url ? 0.03 : 0
+  return Math.max(0.01, Math.min(1, titleScore + platformScore + coverBonus))
 }
 
 function normalizeBarcode(value) {
@@ -381,6 +512,8 @@ async function lookupBarcodeByValue(value, { fromScan = false } = {}) {
 
     if (suggestions.length > 0) {
       igdbResults.value = suggestions
+      sourceFilter.value = 'all'
+      searchErrors.value = data.errors || searchErrors.value
       igdbSearch.value = data.lookup_title || titleCandidates[0] || ''
       barcodeLookupInfo.value = `Found ${suggestions.length} metadata matches. Tap one to apply.`
       if (!existing?.id) notifySuccess('Barcode recognized. Choose a match below.')
@@ -394,7 +527,7 @@ async function lookupBarcodeByValue(value, { fromScan = false } = {}) {
         barcodeLookupInfo.value = `Found title "${titleCandidates[0]}". Choose a match below.`
         if (!existing?.id) notifySuccess('Title candidate found for barcode.')
       } else {
-        barcodeLookupInfo.value = `Found title "${titleCandidates[0]}", but no IGDB/GameTDB match.`
+        barcodeLookupInfo.value = `Found title "${titleCandidates[0]}", but no IGDB/RAWG/GameTDB match.`
       }
       return
     }
@@ -434,7 +567,7 @@ function fillFromIgdb(result) {
   if (game.value.platform_id) {
     // Check if a platform match exists and differs
     let matchId = null
-    if (result.source === 'igdb' && result.platforms?.length > 0) {
+    if ((result.source === 'igdb' || result.source === 'rawg') && result.platforms?.length > 0) {
       const match = platforms.value.find(p =>
         result.platforms.some(rp =>
           rp.toLowerCase().includes(p.name.toLowerCase()) ||
@@ -455,10 +588,13 @@ function fillFromIgdb(result) {
   if (result.source === 'igdb') {
     if (game.value.release_date && result.release_date) overwrites.push('Year')
   }
+  if (result.source === 'rawg') {
+    if (game.value.release_date && result.release_date) overwrites.push('Year')
+  }
 
   if (overwrites.length > 0) {
     const ok = window.confirm(
-      `Apply IGDB data?\n\nThis will overwrite: ${overwrites.join(', ')}\n\nClick OK to apply or Cancel to keep your data.`
+      `Apply metadata?\n\nThis will overwrite: ${overwrites.join(', ')}\n\nClick OK to apply or Cancel to keep your data.`
     )
     if (!ok) {
       igdbResults.value = []
@@ -478,6 +614,21 @@ function fillFromIgdb(result) {
     game.value.release_date = result.release_date
     game.value.developer = result.developer || null
     game.value.publisher = result.publisher || null
+    if (result.platforms?.length > 0) {
+      const match = platforms.value.find(p =>
+        result.platforms.some(rp =>
+          rp.toLowerCase().includes(p.name.toLowerCase()) ||
+          p.name.toLowerCase().includes(rp.toLowerCase())
+        )
+      )
+      if (match) game.value.platform_id = match.id
+    }
+  }
+
+  if (result.source === 'rawg') {
+    game.value.rawg_id = result.rawg_id || null
+    game.value.genre = result.genre || game.value.genre
+    game.value.release_date = result.release_date || game.value.release_date
     if (result.platforms?.length > 0) {
       const match = platforms.value.find(p =>
         result.platforms.some(rp =>
@@ -732,6 +883,22 @@ onUnmounted(() => {
   margin-top: 1rem;
 }
 
+.search-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.source-filter {
+  min-width: 170px;
+}
+
+.result-count {
+  font-size: 0.8rem;
+}
+
 .igdb-item {
   display: flex;
   gap: 1rem;
@@ -751,11 +918,34 @@ onUnmounted(() => {
   background: var(--bg-lighter);
 }
 
+.result-score {
+  width: 42px;
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: 0.4rem;
+}
+
 .igdb-item img {
   width: 60px;
   height: 80px;
   object-fit: cover;
   border-radius: 0.25rem;
+}
+
+.result-meta {
+  min-width: 0;
+}
+
+.result-meta strong,
+.result-meta p {
+  overflow-wrap: anywhere;
 }
 .source-badge {
   font-size: 0.65rem;
@@ -938,6 +1128,15 @@ onUnmounted(() => {
   }
 
   .search-row .btn {
+    width: 100%;
+  }
+
+  .search-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .source-filter {
     width: 100%;
   }
 

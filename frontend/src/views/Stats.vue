@@ -82,6 +82,8 @@
               <th>Platform</th>
               <th>Items</th>
               <th>Value</th>
+              <th>Invested</th>
+              <th>Profit/Loss</th>
             </tr>
           </thead>
           <tbody>
@@ -89,6 +91,10 @@
               <td>{{ p.name }}</td>
               <td>{{ p.count }}</td>
               <td>€{{ formatNumber(p.value) }}</td>
+              <td>€{{ formatNumber(p.invested) }}</td>
+              <td :class="(p.profit_loss || 0) >= 0 ? 'text-success' : 'text-error'">
+                {{ (p.profit_loss || 0) >= 0 ? '+' : '' }}€{{ formatNumber(p.profit_loss || 0) }}
+              </td>
             </tr>
           </tbody>
         </table>
