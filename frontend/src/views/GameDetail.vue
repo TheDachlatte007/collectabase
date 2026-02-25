@@ -59,8 +59,8 @@
       </div>
 
       <div class="info-card">
-        <div class="flex flex-between items-start mb-2">
-          <div>
+        <div class="flex flex-between items-start mb-2 detail-header">
+          <div class="detail-title-block">
             <h1>{{ game.title }}</h1>
             <p class="text-muted">{{ game.platform_name }}</p>
           </div>
@@ -1032,7 +1032,7 @@ onMounted(async () => {
   }
 
   /* Title + actions: stack on very small screens */
-  .flex.flex-between.items-start {
+  .detail-header {
     flex-direction: column;
     gap: 1rem;
     align-items: stretch;
@@ -1181,6 +1181,10 @@ onMounted(async () => {
   max-width: 760px;
 }
 
+.actions-toolbar > * {
+  min-width: 0;
+}
+
 .actions-toolbar .btn-compact {
   min-height: 28px !important;
   padding: 0.22rem 0.5rem !important;
@@ -1193,6 +1197,15 @@ onMounted(async () => {
 
 .items-start {
   align-items: flex-start;
+}
+
+.detail-title-block {
+  min-width: 0;
+}
+
+.detail-title-block h1 {
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 .more-menu {
@@ -1228,6 +1241,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0.2rem;
   z-index: 25;
+  max-width: min(88vw, 280px);
 }
 
 .more-menu-link {
@@ -1335,6 +1349,8 @@ onMounted(async () => {
   background: var(--bg);
   padding: 1rem;
   border-radius: 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .detail-item label {
@@ -1539,6 +1555,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .manual-field input {
@@ -1580,5 +1597,118 @@ onMounted(async () => {
 
 .price-history-value {
   font-size: 0.85rem;
+}
+
+@media (max-width: 639px) {
+  .value-badge {
+    top: 0.6rem;
+    right: 0.6rem;
+    font-size: 1rem;
+    padding: 0.35rem 0.7rem;
+  }
+
+  .actions-toolbar {
+    margin-left: 0;
+    max-width: none;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actions-toolbar .btn-compact,
+  .actions-toolbar > .btn,
+  .actions-toolbar > .more-menu {
+    width: 100%;
+    min-height: 34px !important;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .actions-toolbar > .btn-danger {
+    grid-column: span 2;
+  }
+
+  .more-menu {
+    width: 100%;
+  }
+
+  .more-menu > summary {
+    width: 100%;
+    display: inline-flex;
+  }
+
+  .more-menu-list {
+    left: 0;
+    right: 0;
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .detail-item {
+    padding: 0.8rem;
+  }
+
+  .price-cells {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .price-cell {
+    min-width: 0;
+  }
+
+  .p-val {
+    font-size: 1.05rem;
+  }
+
+  .start-value-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .start-value-row .btn {
+    width: 100%;
+  }
+
+  .market-suggestion-actions {
+    flex-direction: column;
+  }
+
+  .market-suggestion-actions .btn {
+    width: 100%;
+  }
+
+  .manual-entry-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+    align-items: stretch;
+  }
+
+  .manual-field input {
+    width: 100%;
+  }
+
+  .manual-entry-fields > .btn {
+    grid-column: span 2;
+    width: 100%;
+  }
+
+  .price-history-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .price-history-row .btn {
+    width: 100%;
+  }
 }
 </style>
