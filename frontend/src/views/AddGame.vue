@@ -77,8 +77,13 @@
               <button type="button" class="btn btn-secondary barcode-btn" @click="lookupBarcode" :disabled="barcodeLookupLoading || !game.barcode" title="Lookup barcode">
                 {{ barcodeLookupLoading ? '...' : '🔎' }}
               </button>
+              <button type="button" class="btn btn-secondary barcode-btn" @click="openScanner" title="Scan barcode">
+                📷
+              </button>
             </div>
-            <p class="barcode-status scanner-paused-note">Scanner paused until HTTPS is enabled.</p>
+            <p v-if="scannerNoticeVisible && !scannerFeatureEnabled" class="barcode-status scanner-info-note">
+              Scanner is available on HTTPS or localhost.
+            </p>
             <p v-if="barcodeLookupInfo" class="barcode-status">{{ barcodeLookupInfo }}</p>
           </div>
 
@@ -264,6 +269,7 @@ const saveForced = ref(false)
 const scannerOpen = ref(false)
 const scannerError = ref('')
 const scannerMode = ref('')
+const scannerNoticeVisible = ref(false)
 const scannerVideo = ref(null)
 const barcodeLookupLoading = ref(false)
 const barcodeLookupInfo = ref('')
@@ -724,9 +730,10 @@ function saveAnyway() {
 
 function openScanner() {
   if (!scannerFeatureEnabled) {
-    notifyError('Scanner is paused until HTTPS is enabled.')
+    scannerNoticeVisible.value = true
     return
   }
+  scannerNoticeVisible.value = false
   scannerOpen.value = true
   scannerError.value = ''
   scannerMode.value = ''
@@ -1034,8 +1041,12 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
 }
 
-.scanner-paused-note {
-  color: #f59e0b;
+.scanner-info-note {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.5rem;
 }
 
 .scanner-overlay {

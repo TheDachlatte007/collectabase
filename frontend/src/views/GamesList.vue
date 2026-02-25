@@ -21,6 +21,15 @@
           <option value="accessory">🕹️ Accessories</option>
           <option value="misc">📦 Misc</option>
         </select>
+        <select v-model="sortBy" class="filter-select">
+          <option value="name_asc">Sort: Name A-Z</option>
+          <option value="name_desc">Sort: Name Z-A</option>
+          <option value="value_desc">Sort: Value High-Low</option>
+          <option value="value_asc">Sort: Value Low-High</option>
+          <option value="date_desc">Sort: Date Added Newest</option>
+          <option value="date_asc">Sort: Date Added Oldest</option>
+          <option value="platform_asc">Sort: Platform A-Z</option>
+        </select>
       </div>
     </div>
 
@@ -69,15 +78,20 @@ const loading = ref(true)
 const search = ref('')
 const selectedPlatform = ref('')
 const selectedType = ref('')
+const sortBy = ref('name_asc')
 const brokenCoverIds = ref({})
 
 const filteredGames = computed(() => {
-  return games.value.filter(g => {
+  const filtered = games.value.filter(g => {
     const matchesSearch = g.title.toLowerCase().includes(search.value.toLowerCase())
-    const matchesPlatform = !selectedPlatform.value || g.platform_id === selectedPlatform.value
+    const matchesPlatform = !selectedPlatform.value || String(g.platform_id) === String(selectedPlatform.value)
     const matchesType = !selectedType.value || g.item_type === selectedType.value
     return matchesSearch && matchesPlatform && matchesType
   })
+
+  const sorted = [...filtered]
+  sorted.sort((a, b) => compareGames(a, b, sortBy.value))
+  return sorted
 })
 
 const platformCounts = computed(() => {
@@ -109,6 +123,54 @@ function coverSrc(game) {
   if (game.cover_url && !brokenCoverIds.value[game.id]) return game.cover_url
   if (needsAutoCover(game.item_type)) return makeFallbackCoverDataUrl(game)
   return null
+}
+
+function safeNumber(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function safeDate(value) {
+  const ts = new Date(value).getTime()
+  return Number.isFinite(ts) ? ts : null
+}
+
+function compareText(a, b) {
+  return String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' })
+}
+
+function compareGames(a, b, mode) {
+  if (mode === 'name_desc') return compareText(b.title, a.title)
+  if (mode === 'value_desc') {
+    const av = safeNumber(a.current_value)
+    const bv = safeNumber(b.current_value)
+    if (av == null && bv == null) return compareText(a.title, b.title)
+    if (av == null) return 1
+    if (bv == null) return -1
+    if (av !== bv) return bv - av
+    return compareText(a.title, b.title)
+  }
+  if (mode === 'value_asc') {
+    const av = safeNumber(a.current_value)
+    const bv = safeNumber(b.current_value)
+    if (av == null && bv == null) return compareText(a.title, b.title)
+    if (av == null) return 1
+    if (bv == null) return -1
+    if (av !== bv) return av - bv
+    return compareText(a.title, b.title)
+  }
+  if (mode === 'date_desc' || mode === 'date_asc') {
+    const at = safeDate(a.created_at) ?? safeNumber(a.id) ?? 0
+    const bt = safeDate(b.created_at) ?? safeNumber(b.id) ?? 0
+    if (at !== bt) return mode === 'date_desc' ? bt - at : at - bt
+    return compareText(a.title, b.title)
+  }
+  if (mode === 'platform_asc') {
+    const platformCmp = compareText(a.platform_name, b.platform_name)
+    if (platformCmp !== 0) return platformCmp
+    return compareText(a.title, b.title)
+  }
+  return compareText(a.title, b.title)
 }
 
 async function loadData() {

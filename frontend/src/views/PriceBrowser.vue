@@ -138,15 +138,15 @@
               </td>
               <td class="col-price">
                 <span v-if="item.loose_eur != null" class="price">€{{ item.loose_eur.toFixed(2) }}</span>
-                <span v-else class="text-muted">–</span>
+                <span v-else class="na-value">N/A</span>
               </td>
               <td class="col-price">
                 <span v-if="item.cib_eur != null" class="price">€{{ item.cib_eur.toFixed(2) }}</span>
-                <span v-else class="text-muted">–</span>
+                <span v-else class="na-value">N/A</span>
               </td>
               <td class="col-price">
                 <span v-if="item.new_eur != null" class="price">€{{ item.new_eur.toFixed(2) }}</span>
-                <span v-else class="text-muted">–</span>
+                <span v-else class="na-value">N/A</span>
               </td>
               <td class="col-actions">
                 <button
@@ -710,6 +710,10 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
   color: var(--primary);
   font-weight: 500;
+}
+
+.na-value {
+  color: var(--text-muted);
 }
 
 /* ── Pagination ── */

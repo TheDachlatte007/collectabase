@@ -7,6 +7,7 @@
     <div v-else-if="games.length === 0" class="empty">
       <h3>Your wishlist is empty</h3>
       <p>Add games you want to track or purchase</p>
+      <router-link to="/prices" class="btn btn-secondary empty-cta">Browse Prices →</router-link>
     </div>
 
     <div v-else class="grid">
@@ -111,5 +112,9 @@ onMounted(loadWishlist)
 .card-link {
   position: absolute;
   inset: 0;
+}
+
+.empty-cta {
+  margin-top: 0.75rem;
 }
 </style>

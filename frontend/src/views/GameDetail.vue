@@ -73,7 +73,7 @@
               {{ priceLoading ? '⏳ Fetching...' : '💰 Fetch Market Price' }}
             </button>
             <details class="more-menu">
-              <summary class="btn btn-secondary btn-compact">⋯ More</summary>
+              <summary class="btn btn-secondary btn-compact more-trigger" aria-label="More actions" title="More actions">⋮</summary>
               <div class="more-menu-list">
                 <button type="button" class="more-menu-link more-menu-btn" @click="openPriceBrowserSearch">🔎 Open in Prices</button>
                 <button type="button" class="more-menu-link more-menu-btn" @click="useConsolePlaceholder" :disabled="placeholderApplying">
@@ -1205,6 +1205,13 @@ onMounted(async () => {
 
 .more-menu > summary::-webkit-details-marker {
   display: none;
+}
+
+.more-trigger {
+  min-width: 2rem;
+  justify-content: center;
+  font-size: 0.9rem !important;
+  padding-inline: 0.35rem !important;
 }
 
 .more-menu-list {

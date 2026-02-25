@@ -97,14 +97,17 @@ import NotificationStack from './components/NotificationStack.vue'
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.95rem;
-  transition: color 0.2s;
+  transition: color 0.2s, border-color 0.2s;
   white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 0.2rem;
 }
 
 .desktop-nav a:hover,
 .desktop-nav a.active,
 .desktop-nav a.router-link-active {
   color: var(--text);
+  border-bottom-color: var(--primary);
 }
 
 .add-btn {
@@ -161,6 +164,8 @@ main {
 
 .mobile-nav a.nav-active {
   color: var(--primary);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--primary);
 }
 
 /* ── Responsive breakpoint ── */

@@ -33,7 +33,6 @@ export function isSvgDataCover(url) {
 }
 
 export function makeFallbackCoverDataUrl(item = {}) {
-  const title = escapeXml(item.title || 'Collection Item')
   const platform = escapeXml(item.platform_name || item.platform || '')
   const type = String(item.item_type || '').toLowerCase()
   const { bg, bg2 } = coverColors(type)
@@ -50,8 +49,7 @@ export function makeFallbackCoverDataUrl(item = {}) {
 <rect x="34" y="34" width="532" height="732" rx="22" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>
 <text x="300" y="150" text-anchor="middle" fill="#f8fafc" font-size="84">${icon}</text>
 <text x="300" y="230" text-anchor="middle" fill="#f1f5f9" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">${escapeXml(typeLabel)}</text>
-<text x="300" y="300" text-anchor="middle" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">${title.slice(0, 30)}</text>
-<text x="300" y="344" text-anchor="middle" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="20">${platform.slice(0, 38)}</text>
+<text x="300" y="312" text-anchor="middle" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="20">${platform.slice(0, 38)}</text>
 </svg>`
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }

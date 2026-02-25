@@ -77,11 +77,9 @@
             {{ info.igdb_configured ? '✅ Configured' : '❌ Not configured' }}
           </span>
         </div>
-        <div class="info-item">
+        <div v-if="info.pricecharting_configured" class="info-item">
           <label>PriceCharting</label>
-          <span :class="info.pricecharting_configured ? 'status-ok' : 'status-warn'">
-            {{ info.pricecharting_configured ? '✅ configured' : '⚠️ PRICECHARTING_TOKEN not set' }}
-          </span>
+          <span class="status-ok">✅ configured</span>
         </div>
         <div class="info-item">
           <label>eBay Market Prices</label>
@@ -358,8 +356,8 @@ const schedulerTypeLabel = computed(() => {
 const setupHints = computed(() => {
   const hints = []
   if (!info.value.igdb_configured) hints.push('Set IGDB_CLIENT_ID + IGDB_CLIENT_SECRET to improve metadata and cover lookup.')
-  if (!info.value.pricecharting_configured && !info.value.ebay_configured) {
-    hints.push('Set PRICECHARTING_TOKEN or EBAY credentials to enable reliable market prices.')
+  if (!info.value.ebay_configured) {
+    hints.push('Set eBay credentials to enable reliable market prices.')
   }
   if ((info.value.missing_covers ?? 0) > 0) hints.push('Run Bulk Enrich to reduce missing covers.')
   if ((info.value.remote_covers ?? 0) > 0) hints.push('Some covers still use remote URLs; re-enrich to cache more locally.')
