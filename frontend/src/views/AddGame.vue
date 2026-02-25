@@ -8,7 +8,7 @@
         <h3>Search Metadata (IGDB / RAWG / GameTDB)</h3>
         <div class="flex gap-2 mb-2 search-row">
           <input v-model="igdbSearch" placeholder="Search by title..." @keyup.enter="searchIgdb" />
-          <button @click="searchIgdb" class="btn btn-secondary" style="flex-shrink:0" :disabled="igdbLoading">
+          <button @click="searchIgdb" class="btn btn-secondary search-btn" :disabled="igdbLoading">
             {{ igdbLoading ? 'Searching...' : 'Search' }}
           </button>
         </div>
@@ -197,7 +197,7 @@
           </div>
 
           <div class="form-group full-width">
-            <label class="flex items-center gap-2">
+            <label class="flex items-center gap-2 wishlist-toggle">
               <input v-model="game.is_wishlist" type="checkbox" />
               Add to Wishlist
             </label>
@@ -211,13 +211,13 @@
 
         <div v-if="duplicateWarning" class="duplicate-warning mt-3">
           <span>⚠️ This game already exists in your collection.</span>
-          <div class="flex gap-2 mt-2">
+          <div class="flex gap-2 mt-2 duplicate-actions">
             <router-link v-if="duplicateWarning.existing_id" :to="`/game/${duplicateWarning.existing_id}`" class="btn btn-secondary">View existing</router-link>
             <button type="button" class="btn btn-secondary" @click="saveAnyway" :disabled="saving">Save anyway</button>
           </div>
         </div>
 
-        <div class="flex gap-2 mt-3">
+        <div class="flex gap-2 mt-3 form-actions">
           <button type="submit" class="btn btn-primary" :disabled="saving">
             {{ saving ? 'Saving...' : (isEditMode ? 'Update Game' : 'Save Game') }}
           </button>
@@ -866,6 +866,7 @@ onUnmounted(() => {
 <style scoped>
 .form-layout {
   max-width: 800px;
+  min-width: 0;
 }
 
 .duplicate-warning {
@@ -880,6 +881,10 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 1rem;
+}
+
+.form-grid > * {
+  min-width: 0;
 }
 
 .form-grid .full-width {
@@ -919,6 +924,7 @@ onUnmounted(() => {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   min-height: 44px;
+  min-width: 0;
 }
 
 .igdb-item:hover {
@@ -947,6 +953,7 @@ onUnmounted(() => {
 }
 
 .result-meta {
+  flex: 1;
   min-width: 0;
 }
 
@@ -965,6 +972,10 @@ onUnmounted(() => {
 .search-row input {
   flex: 1;
   min-width: 0;
+}
+
+.search-btn {
+  flex-shrink: 0;
 }
 
 .cover-preview-row {
@@ -1010,6 +1021,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 0.4rem;
   justify-content: center;
+  min-width: 0;
 }
 
 .cover-upload-error {
@@ -1018,7 +1030,8 @@ onUnmounted(() => {
 }
 
 .barcode-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 0.5rem;
   align-items: stretch;
 }
@@ -1029,8 +1042,9 @@ onUnmounted(() => {
 }
 
 .barcode-btn {
+  width: 42px;
   min-width: 42px;
-  padding: 0.45rem 0.65rem;
+  padding: 0.45rem 0;
   justify-content: center;
 }
 
@@ -1127,6 +1141,18 @@ onUnmounted(() => {
   color: #fca5a5;
 }
 
+.wishlist-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.duplicate-actions,
+.form-actions {
+  flex-wrap: wrap;
+}
+
 @media (max-width: 639px) {
   .form-grid {
     grid-template-columns: 1fr;
@@ -1148,6 +1174,7 @@ onUnmounted(() => {
   }
 
   .source-filter {
+    min-width: 0;
     width: 100%;
   }
 
@@ -1179,8 +1206,35 @@ onUnmounted(() => {
   }
 
   .barcode-btn {
-    min-width: 38px;
-    padding: 0.35rem 0.45rem;
+    width: 40px;
+    min-width: 40px;
+    padding: 0.35rem 0;
+  }
+
+  .barcode-row {
+    grid-template-columns: minmax(0, 1fr) 40px 40px;
+  }
+
+  .cover-preview-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cover-upload-actions {
+    width: 100%;
+  }
+
+  .cover-upload-actions .btn {
+    width: 100%;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .btn,
+  .form-actions a {
+    width: 100%;
   }
 }
 </style>
