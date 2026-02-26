@@ -2,10 +2,11 @@ import os
 from pathlib import Path
 import re
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ...database import get_app_meta_many, get_db, set_app_meta
+from ..security import admin_protection_status, require_admin_access
 
 router = APIRouter()
 
@@ -173,6 +174,7 @@ async def settings_info():
         ]
     )
     scheduler = _workflow_scheduler_status()
+    admin_status = admin_protection_status()
 
     def _meta_value(key, default=None):
         return meta.get(key, {}).get("value", default)
@@ -222,12 +224,13 @@ async def settings_info():
         "last_catalog_scrape_at": _meta_value("last_catalog_scrape_at"),
         "last_catalog_scrape_platforms": _meta_value("last_catalog_scrape_platforms", ""),
         "last_catalog_scrape_total": int(_meta_value("last_catalog_scrape_total", 0) or 0),
+        **admin_status,
         **scheduler,
     }
 
 
 @router.post("/api/settings/secrets")
-async def update_secrets(payload: SecretsUpdate):
+async def update_secrets(payload: SecretsUpdate, _admin: None = Depends(require_admin_access)):
     updated = []
     values = {
         "ebay_client_id": payload.ebay_client_id,
@@ -253,7 +256,7 @@ async def update_secrets(payload: SecretsUpdate):
 
 
 @router.post("/api/settings/clear-covers")
-async def clear_all_covers():
+async def clear_all_covers(_admin: None = Depends(require_admin_access)):
     with get_db() as db:
         db.execute("UPDATE games SET cover_url = NULL")
         db.commit()
@@ -261,7 +264,7 @@ async def clear_all_covers():
 
 
 @router.delete("/api/database/clear")
-async def clear_database():
+async def clear_database(_admin: None = Depends(require_admin_access)):
     with get_db() as db:
         db.execute("DELETE FROM games")
         db.commit()

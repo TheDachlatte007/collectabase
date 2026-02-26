@@ -41,6 +41,18 @@ docker-compose up --build
 
 4. Open http://localhost:8000
 
+### Optional: Admin API Guard (recommended for remote access)
+
+Set an admin key in your backend environment:
+
+```bash
+ADMIN_API_KEY=your-long-random-key
+```
+
+Protected admin/bulk endpoints then require `X-Admin-Key` (or `Authorization: Bearer ...`).
+Without an admin key, those endpoints are only allowed from local/private clients.
+If you run behind a reverse proxy and need `X-Forwarded-For`, set `TRUST_PROXY_HEADERS=true`.
+
 ## Usage
 
 - **Add Game**: Click "+ Add Game" and fill details

@@ -31,6 +31,7 @@ app.include_router(price_router)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend", "dist")
+FRONTEND_DIR_RESOLVED = Path(FRONTEND_DIR).resolve()
 CONSOLE_FALLBACKS_DIR = os.path.join(BASE_DIR, "backend", "static", "console-fallbacks")
 
 assets_dir = os.path.join(FRONTEND_DIR, "assets")
@@ -51,7 +52,7 @@ async def startup_event():
 
 @app.get("/")
 async def root():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    return FileResponse(str(FRONTEND_DIR_RESOLVED / "index.html"))
 
 
 @app.get("/{path:path}")
@@ -59,10 +60,15 @@ async def catch_all(path: str):
     if path.startswith("api/"):
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": "API endpoint not found"})
 
-    file_path = os.path.join(FRONTEND_DIR, path)
-    if os.path.exists(file_path) and os.path.isfile(file_path):
-        return FileResponse(file_path)
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    requested = (FRONTEND_DIR_RESOLVED / path).resolve()
+    try:
+        requested.relative_to(FRONTEND_DIR_RESOLVED)
+    except ValueError:
+        return FileResponse(str(FRONTEND_DIR_RESOLVED / "index.html"))
+
+    if requested.exists() and requested.is_file():
+        return FileResponse(str(requested))
+    return FileResponse(str(FRONTEND_DIR_RESOLVED / "index.html"))
 
 
 if __name__ == "__main__":

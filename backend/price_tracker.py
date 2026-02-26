@@ -11,9 +11,10 @@ from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from .api.security import require_admin_access
 from .database import dict_from_row, get_app_meta_many, get_db, set_app_meta
 
 router = APIRouter()
@@ -305,8 +306,8 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
             best_score = score
             best = item
 
-    # Keep threshold moderate so descriptive import titles still map to the same catalog item.
-    if not best or best_score < 0.42:
+    # Ignore weak fuzzy hits; they can incorrectly map unrelated items.
+    if not best or best_score < 0.55:
         return None
 
     loose_eur = best.get("loose_eur")
@@ -833,7 +834,7 @@ async def delete_price_history_entry(game_id: int, entry_id: int):
 
 
 @router.post("/api/prices/update-all")
-async def bulk_price_update(limit: int = 100):
+async def bulk_price_update(limit: int = 100, _admin: None = Depends(require_admin_access)):
     """Fetch prices for up to `limit` games (only non-wishlist games)."""
     with get_db() as db:
         try:
@@ -1367,7 +1368,11 @@ def _derive_platform_label(page_url: Optional[str]) -> Optional[str]:
 
 
 @router.post("/api/price-catalog/scrape")
-async def scrape_catalog(platform: str = "all", q: Optional[str] = None):
+async def scrape_catalog(
+    platform: str = "all",
+    q: Optional[str] = None,
+    _admin: None = Depends(require_admin_access),
+):
     """Scrape PriceCharting catalog for one or all platforms into price_catalog table."""
     query = (q or "").strip()
     if query:
@@ -1478,7 +1483,7 @@ async def scrape_catalog(platform: str = "all", q: Optional[str] = None):
 
 
 @router.post("/api/price-catalog/enrich-library")
-async def enrich_catalog_from_library(limit: int = 120):
+async def enrich_catalog_from_library(limit: int = 120, _admin: None = Depends(require_admin_access)):
     """
     Fill price_catalog incrementally by scraping titles already present in the local library.
     This helps grow coverage beyond the paginated console-catalog scrape.
@@ -1639,7 +1644,7 @@ async def catalog_platforms():
 
 
 @router.delete("/api/price-catalog")
-async def clear_catalog(platform: Optional[str] = None):
+async def clear_catalog(platform: Optional[str] = None, _admin: None = Depends(require_admin_access)):
     """Delete all (or one platform's) entries from the price catalog."""
     with get_db() as db:
         if platform:

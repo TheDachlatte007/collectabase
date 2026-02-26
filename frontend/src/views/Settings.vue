@@ -96,6 +96,12 @@
           </span>
         </div>
         <div class="info-item">
+          <label>Admin Guard</label>
+          <span :class="info.admin_key_configured ? 'status-ok' : 'status-warn'">
+            {{ info.admin_key_configured ? '✅ API key protection enabled' : '⚠️ Local-only protection (set ADMIN_API_KEY for remote)' }}
+          </span>
+        </div>
+        <div class="info-item">
           <label>Total Items</label>
           <span>{{ info.total_items ?? '—' }}</span>
         </div>
@@ -144,6 +150,19 @@
         Save provider credentials server-side. Values are write-only in UI and are not returned by API.
       </p>
       <div class="secrets-grid">
+        <div class="form-group mb-0">
+          <label>Admin API Key (local browser)</label>
+          <input
+            v-model.trim="localAdminKey"
+            type="password"
+            autocomplete="off"
+            placeholder="Used for protected admin actions"
+          />
+          <div class="secret-actions mt-2">
+            <button @click="saveLocalAdminKey" class="btn btn-secondary btn-small">Save Local Key</button>
+            <button @click="clearLocalAdminKey" class="btn btn-secondary btn-small">Clear</button>
+          </div>
+        </div>
         <div class="form-group mb-0">
           <label>eBay Client ID</label>
           <input v-model.trim="secretsForm.ebay_client_id" type="text" autocomplete="off" placeholder="Leave empty to keep current value" />
@@ -311,6 +330,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { importApi, priceApi, settingsApi } from '../api'
+import { getAdminApiKey, setAdminApiKey } from '../api/http'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
 import { loadUiPrefs, setUiPrefs } from '../utils/uiPreferences'
 
@@ -332,6 +352,7 @@ const priceUpdateDone = ref(false)
 const priceLimit = ref(100)
 const priceProgress = ref({ success: 0, failed: 0, total: 0, done: 0 })
 const uiPrefs = ref(loadUiPrefs())
+const localAdminKey = ref(getAdminApiKey())
 const secretsSaving = ref(false)
 const secretsForm = ref({
   ebay_client_id: '',
@@ -372,6 +393,17 @@ function onThemeChange(event) {
 function onDensityChange(event) {
   const nextDensity = event?.target?.value || 'comfortable'
   uiPrefs.value = setUiPrefs({ ...uiPrefs.value, density: nextDensity })
+}
+
+function saveLocalAdminKey() {
+  setAdminApiKey(localAdminKey.value)
+  notifySuccess('Local admin key saved for this browser.')
+}
+
+function clearLocalAdminKey() {
+  localAdminKey.value = ''
+  setAdminApiKey('')
+  notifySuccess('Local admin key removed from this browser.')
 }
 
 function resetSecretsForm() {

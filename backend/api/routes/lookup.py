@@ -2,9 +2,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from ..errors import bad_request, not_found
+from ..security import require_admin_access
 from ..schemas import BarcodeLookup, IGDBSearch
 from ...database import dict_from_row, get_db, set_app_meta
 from ...services.lookup_service import (
@@ -262,7 +263,7 @@ async def set_console_placeholder_cover(game_id: int):
 
 
 @router.post("/api/enrich/all")
-async def enrich_all_covers(limit: int = 20):
+async def enrich_all_covers(limit: int = 20, _admin: None = Depends(require_admin_access)):
     with get_db() as db:
         rows = db.execute(
             """
