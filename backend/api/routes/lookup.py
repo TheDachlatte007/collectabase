@@ -69,20 +69,27 @@ async def list_console_fallbacks():
 
     allowed_ext = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"}
     items = []
-    for entry in FALLBACKS_DIR.iterdir():
+    for entry in FALLBACKS_DIR.rglob("*"):
         if not entry.is_file():
             continue
         if entry.suffix.lower() not in allowed_ext:
             continue
+        rel = entry.relative_to(FALLBACKS_DIR)
+        encoded_rel = "/".join(quote(part) for part in rel.parts)
+        folder = rel.parent.as_posix()
+        if folder == ".":
+            folder = ""
         items.append(
             {
                 "filename": entry.name,
+                "path": rel.as_posix(),
+                "folder": folder,
                 "name": entry.stem.replace("-", " ").strip(),
-                "url": f"/console-fallbacks/{quote(entry.name)}",
+                "url": f"/console-fallbacks/{encoded_rel}",
             }
         )
 
-    items.sort(key=lambda x: x["filename"].lower())
+    items.sort(key=lambda x: x["path"].lower())
     return {"items": items}
 
 

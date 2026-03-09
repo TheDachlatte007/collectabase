@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -5,18 +7,25 @@
 }
 
 :root {
-  --primary: #6366f1;
-  --primary-dark: #4f46e5;
+  /* Glassmorphism Dark Theme Core Colors */
+  --primary: #8b5cf6;
+  --primary-dark: #7c3aed;
   --secondary: #ec4899;
-  --bg: #0f172a;
-  --bg-light: #1e293b;
-  --bg-lighter: #334155;
-  --text: #f1f5f9;
+  --bg: #09090b;
+  --bg-light: rgba(24, 24, 27, 0.6);
+  --bg-lighter: rgba(39, 39, 42, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.15);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --card-blur: blur(16px);
+
+  --text: #f8fafc;
   --text-muted: #94a3b8;
-  --border: #334155;
-  --success: #22c55e;
+  --border: var(--glass-border); /* Alias for older usages */
+  --success: #10b981;
   --warning: #f59e0b;
   --error: #ef4444;
+
   --container-padding: 2rem;
   --btn-padding-y: 0.75rem;
   --btn-padding-x: 1.5rem;
@@ -26,6 +35,7 @@
   --field-padding-x: 1rem;
 }
 
+/* Other Themes */
 :root[data-theme='emerald'] {
   --primary: #10b981;
   --primary-dark: #059669;
@@ -49,13 +59,17 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: var(--bg);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background-color: var(--bg);
+  /* The Secret Sauce for Glassmorphism: Background animated gradients */
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.12), transparent 30%),
+    radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.12), transparent 30%),
+    radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.08), transparent 40%);
+  background-attachment: fixed;
   color: var(--text);
   line-height: 1.6;
-  /* Prevent rubber-band overscroll revealing bg colour on mobile */
   overscroll-behavior: contain;
-  /* Remove blue tap flash on all elements */
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -65,21 +79,22 @@ body {
   flex-direction: column;
 }
 
-/* Navigation */
-nav {
+/* Navigation Base Extracted To App.vue for Scoped Glassmorphism */
+nav, .top-bar {
   background: var(--bg-light);
-  padding: 1rem 2rem;
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
   display: flex;
   gap: 2rem;
   align-items: center;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 nav a {
   color: var(--text-muted);
   text-decoration: none;
   font-weight: 500;
-  transition: color 0.2s;
+  transition: color 0.25s ease;
 }
 
 nav a:hover,
@@ -89,9 +104,13 @@ nav a.router-link-active {
 
 .logo {
   font-size: 1.5rem;
-  font-weight: bold;
-  color: var(--primary);
+  font-weight: 700;
+  color: var(--text);
   margin-right: auto;
+  letter-spacing: -0.02em;
+}
+.logo span {
+  color: var(--primary);
 }
 
 /* Container */
@@ -102,63 +121,89 @@ nav a.router-link-active {
   width: 100%;
 }
 
-/* Buttons */
+/* Buttons w/ Glassy Premium Feel */
 .btn {
   padding: var(--btn-padding-y) var(--btn-padding-x);
-  border-radius: 0.5rem;
-  border: none;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
   cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.02em;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  /* Snappy tap response, no 300ms delay */
   touch-action: manipulation;
-  /* Minimum touch target height */
   min-height: var(--btn-min-height);
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
+  box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.39);
 }
 
 .btn-primary:hover {
-  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px 0 rgba(139, 92, 246, 0.45);
+  filter: brightness(1.1);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .btn-secondary {
   background: var(--bg-lighter);
+  backdrop-filter: blur(8px);
   color: var(--text);
+  border: 1px solid var(--glass-border);
 }
 
 .btn-secondary:hover {
-  background: var(--border);
+  background: rgba(63, 63, 70, 0.8);
+  border-color: var(--glass-border-hover);
+  transform: translateY(-2px);
 }
 
 .btn-danger {
-  background: var(--error);
+  background: linear-gradient(135deg, var(--error) 0%, #b91c1c 100%);
   color: white;
+  box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.3);
 }
 
-/* Cards */
+/* Cards (Glassmorphism Base) */
 .card {
   background: var(--bg-light);
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   padding: var(--card-padding);
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
+  box-shadow: var(--glass-shadow);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.45);
+  border-color: var(--glass-border-hover);
 }
 
 /* Form Elements */
 input, select, textarea {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--glass-border);
   color: var(--text);
   padding: var(--field-padding-y) var(--field-padding-x);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
+  font-family: 'Inter', sans-serif;
   font-size: 1rem;
   width: 100%;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(4px);
 }
 
 input[type='checkbox'],
@@ -170,11 +215,13 @@ input[type='radio'] {
 
 input:focus, select:focus, textarea:focus {
   outline: none;
+  background: rgba(0, 0, 0, 0.4);
   border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .form-group label {
@@ -182,6 +229,7 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 0.5rem;
   color: var(--text-muted);
   font-size: 0.875rem;
+  font-weight: 500;
 }
 
 /* Grid */
@@ -209,6 +257,14 @@ input:focus, select:focus, textarea:focus {
   text-align: center;
   padding: 3rem;
   color: var(--text-muted);
+  font-weight: 500;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
+  100% { opacity: 0.5; }
 }
 
 /* Empty State */
@@ -216,6 +272,10 @@ input:focus, select:focus, textarea:focus {
   text-align: center;
   padding: 4rem 2rem;
   color: var(--text-muted);
+  background: var(--bg-light);
+  border-radius: 1rem;
+  border: 1px dashed var(--glass-border);
+  backdrop-filter: var(--card-blur);
 }
 
 .empty h3 {
@@ -223,34 +283,23 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 0.5rem;
 }
 
-/* ─────────────────────────────────
-   Mobile responsive overrides
-   ───────────────────────────────── */
+/* Responsive Overrides */
 @media (max-width: 639px) {
-  /* Tighter container on small screens */
   .container {
     padding: 1rem;
   }
-
-  /* Two-column game grid on phones */
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 0.75rem;
   }
-
-  /* Inputs already have font-size: 1rem which prevents iOS auto-zoom (< 16px zooms) */
-  /* Ensure selects don't zoom either */
   select {
     font-size: 1rem;
   }
-
-  /* Full-width buttons on mobile */
   .btn {
     justify-content: center;
   }
-
-  /* Cards slightly tighter padding */
   .card {
-    padding: 1rem;
+    padding: 1.25rem;
+    border-radius: 0.875rem;
   }
 }

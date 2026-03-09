@@ -69,13 +69,15 @@ import NotificationStack from './components/NotificationStack.vue'
   align-items: center;
   gap: 1.5rem;
   padding: 0.875rem 2rem;
-  background: var(--bg-light);
-  border-bottom: 1px solid var(--border);
+  background: rgba(9, 9, 11, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--glass-border);
   position: sticky;
   top: 0;
   z-index: 100;
-  /* Accommodate iOS status bar in standalone mode */
   padding-top: max(0.875rem, env(safe-area-inset-top));
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
 .logo {
@@ -132,11 +134,13 @@ main {
   left: 0;
   right: 0;
   height: 56px;
-  background: var(--bg-light);
-  border-top: 1px solid var(--border);
+  background: rgba(9, 9, 11, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--glass-border);
   z-index: 100;
-  /* Safe area for iPhone home indicator */
   padding-bottom: max(16px, env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.1);
 }
 
 .mobile-nav a {

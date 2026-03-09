@@ -240,20 +240,25 @@ onMounted(loadData)
 
 .game-card {
   background: var(--bg-light);
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   position: relative;
-  transition: transform 0.2s;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
+  box-shadow: var(--glass-shadow);
 }
 
 .game-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px 0 rgba(0, 0, 0, 0.5);
+  border-color: var(--glass-border-hover);
 }
 
 .cover {
   aspect-ratio: 3/4;
-  background: var(--bg);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.4));
   display: flex;
   align-items: center;
   justify-content: center;

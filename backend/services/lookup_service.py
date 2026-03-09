@@ -156,23 +156,45 @@ def _console_fallback_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "static" / "console-fallbacks"
 
 
+def _console_fallback_image_files() -> list[Path]:
+    base = _console_fallback_dir()
+    if not base.is_dir():
+        return []
+    allowed_ext = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"}
+    files = [p for p in base.rglob("*") if p.is_file() and p.suffix.lower() in allowed_ext]
+    files.sort(key=lambda p: str(p).lower())
+    return files
+
+
+def _console_fallback_url(path: Path) -> Optional[str]:
+    base = _console_fallback_dir()
+    try:
+        rel = path.relative_to(base)
+    except ValueError:
+        return None
+    encoded = "/".join(quote(part) for part in rel.parts)
+    return f"/console-fallbacks/{encoded}"
+
+
 def _local_console_image(slug: str, context_text: str = "") -> Optional[str]:
     if not slug:
         return None
-    base = _console_fallback_dir()
-    allowed_ext = {".png", ".jpg", ".jpeg", ".webp"}
+    files = _console_fallback_image_files()
+    if not files:
+        return None
+    allowed_ext = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"}
 
     # 1) Exact file wins.
     for ext in (".png", ".jpg", ".jpeg", ".webp"):
-        filename = f"{slug}{ext}"
-        if (base / filename).exists():
-            return f"/console-fallbacks/{filename}"
+        for path in files:
+            if path.suffix.lower() == ext and path.stem.lower() == slug:
+                return _console_fallback_url(path)
 
     # 2) Variant files like "<slug>-slim.png" or "<slug>-controller.png".
     normalized_context = _normalize_platform_name(context_text)
     context_tokens = set(normalized_context.split())
     variant_candidates = []
-    for path in base.glob(f"{slug}-*"):
+    for path in files:
         if path.suffix.lower() not in allowed_ext:
             continue
         stem = path.stem.lower()
@@ -190,23 +212,22 @@ def _local_console_image(slug: str, context_text: str = "") -> Optional[str]:
             score = len(tokens) + 10
         elif context_tokens and any(t in context_tokens for t in tokens):
             score = 1
-        variant_candidates.append((score, path.name, tokens))
+        variant_candidates.append((score, path.name, tokens, path))
 
     if not variant_candidates:
         return None
 
     variant_candidates.sort(key=lambda item: (item[0], len(item[1])), reverse=True)
-    best_score, best_name, best_tokens = variant_candidates[0]
+    best_score, best_name, best_tokens, best_path = variant_candidates[0]
     if best_score > 0:
-        return f"/console-fallbacks/{best_name}"
+        return _console_fallback_url(best_path)
 
     # If no token matched, avoid using controller art for plain console titles.
-    for _score, filename, tokens in variant_candidates:
+    for _score, _filename, tokens, path in variant_candidates:
         if "controller" not in tokens:
-            return f"/console-fallbacks/{filename}"
+            return _console_fallback_url(path)
     # Final fallback if only controller variant exists.
-    return f"/console-fallbacks/{best_name}"
-    return None
+    return _console_fallback_url(best_path)
 
 
 def get_console_image(platform_name: str) -> Optional[str]:
