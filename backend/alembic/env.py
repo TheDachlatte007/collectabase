@@ -16,10 +16,15 @@ if config.config_file_name is not None:
 
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db.models import Base
-from db.session import get_database_url
+# Insert the project root (/app in Docker, or parent of backend/ locally)
+# so that `backend.db.models` is importable.
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+from backend.db.models import Base
+from backend.db.session import get_database_url
 
 target_metadata = Base.metadata
 
