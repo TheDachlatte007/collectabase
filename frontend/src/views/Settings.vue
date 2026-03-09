@@ -164,6 +164,16 @@
           </div>
         </div>
         <div class="form-group mb-0">
+          <label>IGDB Client ID</label>
+          <input v-model.trim="secretsForm.igdb_client_id" type="text" autocomplete="off" placeholder="Leave empty to keep current value" />
+          <label class="clear-check"><input v-model="secretsForm.clear_igdb_client_id" type="checkbox" /> Clear stored value</label>
+        </div>
+        <div class="form-group mb-0">
+          <label>IGDB Client Secret</label>
+          <input v-model.trim="secretsForm.igdb_client_secret" type="password" autocomplete="new-password" placeholder="Leave empty to keep current value" />
+          <label class="clear-check"><input v-model="secretsForm.clear_igdb_client_secret" type="checkbox" /> Clear stored value</label>
+        </div>
+        <div class="form-group mb-0">
           <label>eBay Client ID</label>
           <input v-model.trim="secretsForm.ebay_client_id" type="text" autocomplete="off" placeholder="Leave empty to keep current value" />
           <label class="clear-check"><input v-model="secretsForm.clear_ebay_client_id" type="checkbox" /> Clear stored value</label>
@@ -355,10 +365,14 @@ const uiPrefs = ref(loadUiPrefs())
 const localAdminKey = ref(getAdminApiKey())
 const secretsSaving = ref(false)
 const secretsForm = ref({
+  igdb_client_id: '',
+  igdb_client_secret: '',
   ebay_client_id: '',
   ebay_client_secret: '',
   rawg_api_key: '',
   pricecharting_token: '',
+  clear_igdb_client_id: false,
+  clear_igdb_client_secret: false,
   clear_ebay_client_id: false,
   clear_ebay_client_secret: false,
   clear_rawg_api_key: false,
@@ -408,10 +422,14 @@ function clearLocalAdminKey() {
 
 function resetSecretsForm() {
   secretsForm.value = {
+    igdb_client_id: '',
+    igdb_client_secret: '',
     ebay_client_id: '',
     ebay_client_secret: '',
     rawg_api_key: '',
     pricecharting_token: '',
+    clear_igdb_client_id: false,
+    clear_igdb_client_secret: false,
     clear_ebay_client_id: false,
     clear_ebay_client_secret: false,
     clear_rawg_api_key: false,
@@ -421,7 +439,7 @@ function resetSecretsForm() {
 
 async function saveSecrets() {
   const payload = { clear: [] }
-  const fields = ['ebay_client_id', 'ebay_client_secret', 'rawg_api_key', 'pricecharting_token']
+  const fields = ['igdb_client_id', 'igdb_client_secret', 'ebay_client_id', 'ebay_client_secret', 'rawg_api_key', 'pricecharting_token']
   let changed = false
 
   for (const field of fields) {

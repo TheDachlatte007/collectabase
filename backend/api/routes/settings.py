@@ -33,6 +33,8 @@ def _env_any(*names: str) -> str:
 
 
 class SecretsUpdate(BaseModel):
+    igdb_client_id: str | None = None
+    igdb_client_secret: str | None = None
     ebay_client_id: str | None = None
     ebay_client_secret: str | None = None
     rawg_api_key: str | None = None
@@ -41,6 +43,8 @@ class SecretsUpdate(BaseModel):
 
 
 _SECRET_FIELDS = {
+    "igdb_client_id": "cfg:igdb_client_id",
+    "igdb_client_secret": "cfg:igdb_client_secret",
     "ebay_client_id": "cfg:ebay_client_id",
     "ebay_client_secret": "cfg:ebay_client_secret",
     "rawg_api_key": "cfg:rawg_api_key",
