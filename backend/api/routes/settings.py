@@ -237,6 +237,8 @@ async def settings_info():
 async def update_secrets(payload: SecretsUpdate, _admin: None = Depends(require_admin_access)):
     updated = []
     values = {
+        "igdb_client_id": payload.igdb_client_id,
+        "igdb_client_secret": payload.igdb_client_secret,
         "ebay_client_id": payload.ebay_client_id,
         "ebay_client_secret": payload.ebay_client_secret,
         "rawg_api_key": payload.rawg_api_key,
