@@ -26,6 +26,10 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ ./backend/
 COPY cli.py ./
 
+# Copy the entrypoint script
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 # Copy the built frontend from Stage 1 into the expected location
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
@@ -35,5 +39,5 @@ RUN mkdir -p /app/data /app/uploads
 # Expose the API port
 EXPOSE 8000
 
-# Start Uvicorn pointing to the backend module
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run migrations then start Uvicorn
+CMD ["./entrypoint.sh"]
