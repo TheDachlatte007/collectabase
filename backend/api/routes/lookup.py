@@ -321,8 +321,6 @@ async def _run_enrich_all_covers(job_id: str, items: list) -> None:
 
         if cover_url:
             cover_url = await cache_remote_cover(cover_url)
-            if isinstance(cover_url, str) and cover_url.startswith(("http://", "https://")):
-                cover_url = make_console_placeholder_data_url(item.get("platform_name") or item.get("title", ""))
             with get_db() as db:
                 db.execute(
                     "UPDATE games SET cover_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
