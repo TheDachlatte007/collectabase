@@ -75,8 +75,6 @@ body {
 
 #app {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
 /* Navigation Base Extracted To App.vue for Scoped Glassmorphism */

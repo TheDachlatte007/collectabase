@@ -3,30 +3,37 @@
     <NotificationStack />
 
     <!-- Desktop Sidebar -->
-    <aside class="desktop-sidebar">
-      <router-link to="/" class="sidebar-logo">
-        <img src="/icons/android-chrome-192x192.png" alt="Collectabase Logo" class="logo-img" />
-        <span class="logo-text">Collectabase</span>
-      </router-link>
+    <aside class="desktop-sidebar" :class="{ 'collapsed': collapsed }">
+      <div class="sidebar-top">
+        <router-link to="/" class="sidebar-logo">
+          <img src="/icons/android-chrome-192x192.png" alt="Collectabase Logo" class="logo-img" />
+          <span class="logo-text" v-show="!collapsed">Collectabase</span>
+        </router-link>
+        <button class="collapse-btn" @click="toggleSidebar" :title="collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'">
+          <svg v-if="collapsed" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+          <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>
+        </button>
+      </div>
 
       <nav class="sidebar-nav">
-        <router-link to="/" active-class="" exact-active-class="active">
-          <span class="nav-icon">🎮</span> My Games
+        <router-link to="/" active-class="" exact-active-class="active" title="My Games">
+          <span class="nav-icon">🎮</span> <span v-show="!collapsed">My Games</span>
         </router-link>
-        <router-link to="/stats">
-          <span class="nav-icon">📈</span> Stats
+        <router-link to="/stats" title="Stats">
+          <span class="nav-icon">📈</span> <span v-show="!collapsed">Stats</span>
         </router-link>
-        <router-link to="/prices">
-          <span class="nav-icon">💰</span> Prices
+        <router-link to="/prices" title="Prices Browser">
+          <span class="nav-icon">💰</span> <span v-show="!collapsed">Prices</span>
         </router-link>
-        <router-link to="/more">
-          <span class="nav-icon">⚙️</span> More
+        <router-link to="/more" title="More Options">
+          <span class="nav-icon">⚙️</span> <span v-show="!collapsed">More</span>
         </router-link>
       </nav>
 
       <div class="sidebar-footer">
-        <router-link to="/add" class="btn btn-primary add-btn" active-class="btn-active">
-          + Add Game
+        <router-link to="/add" class="btn btn-primary add-btn" active-class="btn-active" title="Add Game">
+          <span v-if="collapsed" style="font-size: 1.25rem;">+</span>
+          <span v-else>+ Add Game</span>
         </router-link>
       </div>
     </aside>
@@ -84,7 +91,22 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import NotificationStack from './components/NotificationStack.vue'
+
+const collapsed = ref(false)
+
+onMounted(() => {
+  const saved = localStorage.getItem('collectabase_sidebar_collapsed')
+  if (saved === 'true') {
+    collapsed.value = true
+  }
+})
+
+function toggleSidebar() {
+  collapsed.value = !collapsed.value
+  localStorage.setItem('collectabase_sidebar_collapsed', String(collapsed.value))
+}
 </script>
 
 <style scoped>
@@ -107,6 +129,44 @@ import NotificationStack from './components/NotificationStack.vue'
   height: 100vh;
   padding: 1.5rem;
   z-index: 100;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.desktop-sidebar.collapsed {
+  width: 80px;
+  padding: 1.5rem 0.75rem;
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2.5rem;
+}
+
+.desktop-sidebar.collapsed .sidebar-top {
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.collapse-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: 0.35rem;
+  transition: color 0.2s, background 0.2s;
+}
+
+.collapse-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-logo {
@@ -114,7 +174,6 @@ import NotificationStack from './components/NotificationStack.vue'
   align-items: center;
   gap: 0.75rem;
   text-decoration: none;
-  margin-bottom: 2.5rem;
 }
 
 .logo-img {
@@ -123,6 +182,7 @@ import NotificationStack from './components/NotificationStack.vue'
   border-radius: 6px;
   object-fit: contain;
   box-shadow: 0 2px 10px rgba(139, 92, 246, 0.2);
+  flex-shrink: 0;
 }
 
 .logo-text {
@@ -130,6 +190,7 @@ import NotificationStack from './components/NotificationStack.vue'
   font-weight: 800;
   color: var(--text);
   letter-spacing: -0.03em;
+  white-space: nowrap;
 }
 
 .sidebar-nav {
@@ -151,6 +212,12 @@ import NotificationStack from './components/NotificationStack.vue'
   font-size: 1rem;
   transition: all 0.2s ease;
   border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.desktop-sidebar.collapsed .sidebar-nav a {
+  justify-content: center;
+  padding: 0.875rem 0;
 }
 
 .sidebar-nav a:hover {
@@ -169,6 +236,8 @@ import NotificationStack from './components/NotificationStack.vue'
 .nav-icon {
   font-size: 1.25rem;
   opacity: 0.8;
+  flex-shrink: 0;
+  display: inline-flex;
 }
 
 .sidebar-footer {
@@ -182,6 +251,12 @@ import NotificationStack from './components/NotificationStack.vue'
   font-size: 1.05rem;
   padding: 0.875rem;
   box-shadow: 0 4px 15px rgba(139, 92, 246, 0.25);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.desktop-sidebar.collapsed .add-btn {
+  padding: 0.875rem 0;
 }
 
 .main-content {

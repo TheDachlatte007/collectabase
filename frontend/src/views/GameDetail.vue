@@ -301,10 +301,9 @@
                   <span class="ml-auto text-sm font-semibold">{{ entryDisplayValue(entry) }}</span>
                 </div>
                 <button
-                  v-if="isManualEntry(entry)"
                   class="btn btn-danger btn-sm ml-3"
                   :disabled="deletingEntryId === entry.id"
-                  @click="removeManualEntry(entry)"
+                  @click="removePriceEntry(entry)"
                 >
                   ✕
                 </button>
@@ -623,9 +622,6 @@ function formatMatchScore(value) {
   return `${percent}%`
 }
 
-function isManualEntry(entry) {
-  return (entry?.source || '').toLowerCase() === 'manual'
-}
 
 function entryDisplayValue(entry) {
   if (!entry) return '—'
@@ -1052,23 +1048,23 @@ async function addManualEntry() {
   }
 }
 
-async function removeManualEntry(entry) {
-  if (!entry?.id || !isManualEntry(entry)) return
-  if (!confirm('Delete this manual price entry?')) return
+async function removePriceEntry(entry) {
+  if (!entry?.id) return
+  if (!confirm('Delete this price entry?')) return
 
   deletingEntryId.value = entry.id
   try {
     const res = await priceApi.deleteHistory(route.params.id, entry.id)
     if (!res.ok) {
       const detail = res.data?.detail
-      notifyError(detail?.message || detail || 'Failed to delete manual entry.')
+      notifyError(detail?.message || detail || 'Failed to delete price entry.')
       return
     }
-    notifySuccess('Manual price entry removed.')
+    notifySuccess('Price entry removed.')
     await loadPriceHistory()
   } catch (e) {
-    console.error('Failed to delete manual entry:', e)
-    notifyError('Failed to delete manual entry.')
+    console.error('Failed to delete price entry:', e)
+    notifyError('Failed to delete price entry.')
   } finally {
     deletingEntryId.value = null
   }

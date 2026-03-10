@@ -77,13 +77,26 @@ def _trim_outliers_and_median(prices):
     if not prices:
         return None, [], None, None
     ordered = sorted(prices)
-    trim_each_side = int(len(ordered) * 0.1)
-    if trim_each_side > 0 and len(ordered) > trim_each_side * 2:
-        trimmed = ordered[trim_each_side:-trim_each_side]
-    else:
+    if len(ordered) < 4:
         trimmed = ordered
+    else:
+        # Interquartile Range (IQR) for better outlier detection
+        n = len(ordered)
+        q1_idx = int(n * 0.25)
+        q3_idx = int(n * 0.75)
+        q1 = ordered[q1_idx]
+        q3 = ordered[q3_idx]
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        trimmed = [p for p in ordered if lower_bound <= p <= upper_bound]
+        if not trimmed:
+            trimmed = ordered
+
     if not trimmed:
         return None, [], None, None
+        
     median_price = float(statistics.median(trimmed))
     return median_price, trimmed, float(min(trimmed)), float(max(trimmed))
 

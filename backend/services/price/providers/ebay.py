@@ -58,7 +58,7 @@ async def fetch_ebay_market_price(title: str, platform_name: str):
         return None
 
     query = " ".join(part for part in [title, platform_name] if part).strip()
-    params = {"q": query, "filter": "conditionIds:{2750|3000}", "limit": "10"}
+    params = {"q": query, "filter": "conditionIds:{2750|3000}", "limit": "30"}
     headers = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_DE"}
 
     try:

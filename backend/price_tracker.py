@@ -182,7 +182,7 @@ async def get_price_history(game_id: int):
 
 @router.delete("/api/games/{game_id}/price-history/{entry_id}")
 async def delete_price_history_entry(game_id: int, entry_id: int):
-    """Delete a manual price entry. Automatic provider entries stay immutable."""
+    """Delete any price history entry (manual or provider)."""
     with get_db() as db:
         row = db.execute(
             "SELECT id, game_id, source FROM price_history WHERE id = ?",
@@ -193,8 +193,6 @@ async def delete_price_history_entry(game_id: int, entry_id: int):
         item = dict_from_row(row)
         if int(item["game_id"]) != int(game_id):
             raise HTTPException(status_code=404, detail="Price history entry not found for this game")
-        if (item.get("source") or "").strip().lower() != "manual":
-            raise HTTPException(status_code=400, detail="Only manual entries can be deleted")
         db.execute("DELETE FROM price_history WHERE id = ?", (entry_id,))
         db.commit()
     return {"ok": True}
