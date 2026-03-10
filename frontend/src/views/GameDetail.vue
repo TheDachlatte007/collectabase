@@ -8,6 +8,7 @@
     </div>
 
     <div v-else class="detail-layout">
+      <!-- LEFT COLUMN -->
       <div class="card cover-card">
         <div class="cover-large">
           <img v-if="currentCoverSrc" :src="currentCoverSrc" class="cover-image" @error="onDetailCoverError" />
@@ -32,25 +33,22 @@
             @change="onCoverFileSelected"
           />
           <details ref="coverUploadMenu" class="cover-upload-menu">
-            <summary class="btn btn-secondary cover-upload-btn" :class="{ disabled: coverUploading }">
-              {{ coverUploading ? '⏳ Uploading...' : '📷 Cover Actions' }}
+            <summary class="btn btn-secondary cover-upload-btn focus-ring" :class="{ disabled: coverUploading }">
+              {{ coverUploading ? '⏳ Uploading...' : '📷 Cover Actions ▼' }}
             </summary>
             <div class="cover-upload-menu-list">
-              <button
-                type="button"
-                class="cover-upload-menu-item"
-                @click="triggerCoverUpload"
-                :disabled="coverUploading"
-              >
-                📷 Upload Photo
+              <button type="button" class="cover-upload-menu-item" @click="triggerCoverUpload" :disabled="coverUploading">
+                📷 Upload Photo...
               </button>
-              <button
-                type="button"
-                class="cover-upload-menu-item"
-                @click="openCoverGallery"
-                :disabled="coverUploading"
-              >
-                🖼 Galerie anschauen
+              <button type="button" class="cover-upload-menu-item" @click="openCoverGallery" :disabled="coverUploading">
+                🖼 Choose from Gallery...
+              </button>
+              <hr class="more-menu-divider" />
+              <button type="button" class="cover-upload-menu-item" @click="enrichCover" :disabled="enriching">
+                {{ enriching ? '⏳ Fetching...' : '🪄 Auto-Fetch Cover' }}
+              </button>
+              <button type="button" class="cover-upload-menu-item" @click="useConsolePlaceholder" :disabled="placeholderApplying">
+                {{ placeholderApplying ? '⏳ Applying...' : '📦 Use Console Logo' }}
               </button>
             </div>
           </details>
@@ -58,112 +56,127 @@
         </div>
       </div>
 
-      <div class="info-card">
+      <!-- RIGHT COLUMN -->
+      <div class="info-layout">
         <div class="flex flex-between items-start mb-2 detail-header">
           <div class="detail-title-block">
             <h1>{{ game.title }}</h1>
             <p class="text-muted">{{ game.platform_name }}</p>
           </div>
           <div class="actions actions-compact actions-toolbar">
-            <router-link :to="`/edit/${game.id}`" class="btn btn-secondary btn-compact">Edit</router-link>
-            <button @click="enrichCover" class="btn btn-secondary btn-compact" :disabled="enriching">
-              {{ enriching ? '⏳ Fetching...' : '🖼 Enrich Cover' }}
-            </button>
-            <button @click="checkPrice" class="btn btn-secondary btn-compact" :disabled="priceLoading">
-              {{ priceLoading ? '⏳ Fetching...' : '💰 Fetch Market Price' }}
-            </button>
+            <router-link :to="`/edit/${game.id}`" class="btn btn-primary btn-compact">Edit</router-link>
             <details class="more-menu">
               <summary class="btn btn-secondary btn-compact more-trigger" aria-label="More actions" title="More actions">⋮</summary>
               <div class="more-menu-list">
-                <button type="button" class="more-menu-link more-menu-btn" @click="openPriceBrowserSearch">🔎 Open in Prices</button>
-                <button type="button" class="more-menu-link more-menu-btn" @click="checkPriceEbay" :disabled="priceLoading">
-                  🛒 Fetch eBay Price
-                </button>
-                <button type="button" class="more-menu-link more-menu-btn" @click="useConsolePlaceholder" :disabled="placeholderApplying">
-                  {{ placeholderApplying ? '⏳ Applying...' : '🖼 Use Console Placeholder' }}
-                </button>
-                <a :href="ebayUrl()" target="_blank" rel="noopener" class="more-menu-link">🛒 eBay Sold</a>
-                <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="more-menu-link">📈 PriceCharting</a>
-                <a :href="rawgUrl()" target="_blank" rel="noopener" class="more-menu-link">🎮 RAWG</a>
+                <button type="button" class="more-menu-link more-menu-btn" @click="openPriceBrowserSearch">🔎 Open in Price Browser</button>
+                <a :href="ebayUrl()" target="_blank" rel="noopener" class="more-menu-link">🛒 eBay Sold Items</a>
+                <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="more-menu-link">📈 PriceCharting Page</a>
+                <a :href="rawgUrl()" target="_blank" rel="noopener" class="more-menu-link">🎮 RAWG Database</a>
+                <hr class="more-menu-divider" />
+                <button type="button" class="more-menu-link more-menu-btn text-danger" @click="deleteGame">🗑 Delete Game</button>
               </div>
             </details>
-            <button @click="deleteGame" class="btn btn-danger btn-compact">Delete</button>
           </div>
         </div>
 
-        <div class="details-grid">
-          <div v-if="game.item_type" class="detail-item">
-            <label>Type</label>
-            <span>{{ game.item_type.charAt(0).toUpperCase() + game.item_type.slice(1) }}</span>
+        <div class="info-cards-container">
+          <!-- METADATA CARD -->
+          <div class="chunk-card">
+            <h3 class="chunk-title">Metadata</h3>
+            <div class="details-grid">
+              <div v-if="game.item_type" class="detail-item">
+                <label>Type</label>
+                <span>{{ game.item_type.charAt(0).toUpperCase() + game.item_type.slice(1) }}</span>
+              </div>
+              <div v-if="game.region" class="detail-item">
+                <label>Region</label>
+                <span>{{ game.region }}</span>
+              </div>
+              <div v-if="game.release_date" class="detail-item">
+                <label>Release Date</label>
+                <span>{{ game.release_date }}</span>
+              </div>
+              <div v-if="game.genre" class="detail-item">
+                <label>Genre</label>
+                <span>{{ game.genre }}</span>
+              </div>
+              <div v-if="game.developer" class="detail-item">
+                <label>Developer</label>
+                <span>{{ game.developer }}</span>
+              </div>
+              <div v-if="game.publisher" class="detail-item">
+                <label>Publisher</label>
+                <span>{{ game.publisher }}</span>
+              </div>
+              <div v-if="game.is_wishlist && game.wishlist_max_price" class="detail-item">
+                <label>Max Wishlist Price</label>
+                <span>€{{ game.wishlist_max_price }}</span>
+              </div>
+            </div>
           </div>
-          <div v-if="game.region" class="detail-item">
-            <label>Region</label>
-            <span>{{ game.region }}</span>
-          </div>
-          <div v-if="game.condition" class="detail-item">
-            <label>Condition</label>
-            <span>{{ game.condition }}</span>
-          </div>
-          <div v-if="game.completeness" class="detail-item">
-            <label>Completeness</label>
-            <span>{{ game.completeness }}</span>
-          </div>
-          <div v-if="game.barcode" class="detail-item">
-            <label>Barcode</label>
-            <span>{{ game.barcode }}</span>
-          </div>
-          <div v-if="game.purchase_price" class="detail-item">
-            <label>Purchase Price</label>
-            <span>€{{ game.purchase_price }}</span>
-          </div>
-          <div v-if="game.purchase_date" class="detail-item">
-            <label>Purchase Date</label>
-            <span>{{ game.purchase_date }}</span>
-          </div>
-          <div v-if="game.location" class="detail-item">
-            <label>Location</label>
-            <span>{{ game.location }}</span>
-          </div>
-          <div v-if="game.release_date" class="detail-item">
-            <label>Release Date</label>
-            <span>{{ game.release_date }}</span>
-          </div>
-          <div v-if="game.genre" class="detail-item">
-            <label>Genre</label>
-            <span>{{ game.genre }}</span>
-          </div>
-          <div v-if="game.developer" class="detail-item">
-            <label>Developer</label>
-            <span>{{ game.developer }}</span>
-          </div>
-          <div v-if="game.publisher" class="detail-item">
-            <label>Publisher</label>
-            <span>{{ game.publisher }}</span>
-          </div>
-          <div v-if="game.is_wishlist && game.wishlist_max_price" class="detail-item">
-            <label>Max Wishlist Price</label>
-            <span>€{{ game.wishlist_max_price }}</span>
-          </div>
-          <div v-if="game.current_value && game.purchase_price" class="detail-item">
-            <label>Profit/Loss</label>
-            <span :class="game.current_value >= game.purchase_price ? 'profit' : 'loss'">
-              {{ game.current_value >= game.purchase_price ? '+' : '' }}€{{ (game.current_value - game.purchase_price).toFixed(2) }}
-            </span>
+
+          <!-- MY COPY CARD -->
+          <div class="chunk-card">
+            <h3 class="chunk-title">My Copy</h3>
+            <div class="details-grid">
+              <div v-if="game.condition" class="detail-item">
+                <label>Condition</label>
+                <span>{{ game.condition }}</span>
+              </div>
+              <div v-if="game.completeness" class="detail-item">
+                <label>Completeness</label>
+                <span>{{ game.completeness }}</span>
+              </div>
+              <div v-if="game.barcode" class="detail-item">
+                <label>Barcode</label>
+                <span>{{ game.barcode }}</span>
+              </div>
+              <div v-if="game.location" class="detail-item">
+                <label>Location</label>
+                <span>{{ game.location }}</span>
+              </div>
+              <div v-if="game.purchase_date" class="detail-item">
+                <label>Purchase Date</label>
+                <span>{{ game.purchase_date }}</span>
+              </div>
+              <div v-if="game.purchase_price" class="detail-item">
+                <label>Purchase Price</label>
+                <span>€{{ game.purchase_price }}</span>
+              </div>
+              <div v-if="game.current_value && game.purchase_price" class="detail-item detail-item-pl">
+                <label>Profit / Loss</label>
+                <span class="pl-pill" :class="game.current_value >= game.purchase_price ? 'profit' : 'loss'">
+                  {{ game.current_value >= game.purchase_price ? '↑' : '↓' }}
+                  €{{ Math.abs(game.current_value - game.purchase_price).toFixed(2) }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div v-if="game.notes" class="notes mt-3">
-          <label>Notes</label>
+        <div v-if="game.notes" class="notes mt-3 card">
+          <label>Personal Notes</label>
           <p>{{ game.notes }}</p>
         </div>
-        <div v-if="game.description" class="notes mt-3">
+        <div v-if="game.description" class="notes mt-3 card">
           <label>Description</label>
           <p class="description-text" v-html="formattedDescription"></p>
         </div>
 
-        <!-- Market Prices -->
-        <div class="price-section mt-3">
-          <label>Market Prices</label>
+        <!-- MARKET PRICES -->
+        <div class="price-section card mt-3">
+          <div class="price-section-header flex flex-between items-center mb-2">
+            <h3 class="chunk-title m-0">Market Prices</h3>
+            <div class="actions-compact">
+              <button @click="checkPrice" class="btn btn-secondary btn-sm" :disabled="priceLoading">
+                {{ priceLoading ? '⏳' : '📊 PriceCharting' }}
+              </button>
+              <button @click="checkPriceEbay" class="btn btn-secondary btn-sm" :disabled="priceLoading">
+                {{ priceLoading ? '⏳' : '🛒 eBay' }}
+              </button>
+            </div>
+          </div>
+
           <div v-if="latestPrice" class="price-cells">
             <div class="price-cell" :class="{ relevant: relevantKey() === 'loose' }">
               <span class="p-label">Loose</span>
@@ -178,25 +191,27 @@
               <span class="p-val">{{ latestPrice.new_price != null ? '€' + latestPrice.new_price.toFixed(2) : '—' }}</span>
             </div>
           </div>
-          <p v-else class="text-muted" style="margin:0.5rem 0 0">Add a price entry to start tracking.</p>
-          <div v-if="latestPrice" class="price-meta">
+          <div v-if="latestPrice" class="price-meta mt-2">
             Last checked: {{ formatDate(latestPrice.fetched_at) }}
             <span :class="`source-pill source-${latestPrice.source}`">{{ latestPrice.source }}</span>
           </div>
-          <div v-if="priceError" class="price-error">{{ priceError }}</div>
-          <div v-if="priceError" class="price-catalog-help">
+
+          <div v-if="priceError" class="price-error mt-2">{{ priceError }}</div>
+          <div v-if="priceError" class="price-catalog-help mt-1">
             <button class="btn btn-secondary btn-sm" @click="openPriceBrowserSearch">
               🔎 Select from Price Catalog
             </button>
           </div>
-          <div class="start-value-row">
+
+          <div class="start-value-row mt-3 pt-2">
             <span class="text-muted">
               Start value:
               <strong>{{ startValue != null ? '€' + formatMoney(startValue) : '—' }}</strong>
             </span>
-            <button class="btn btn-secondary btn-sm" @click="editStartValue">Update Start Value</button>
+            <button class="btn btn-secondary btn-sm" @click="editStartValue">Update Base Line</button>
           </div>
-          <div v-if="marketSuggestion" class="market-suggestion">
+
+          <div v-if="marketSuggestion" class="market-suggestion mt-2">
             <div v-if="marketSuggestion.source === 'pricecharting'" class="market-suggestion-text">
               📊 €{{ formatMoney(marketSuggestion.market_price) }} (PriceCharting - Loose)
               <div v-if="marketSuggestion.matched_title" class="market-match">
@@ -209,26 +224,27 @@
               🛒 ~€{{ formatMoney(marketSuggestion.market_price) }}
               (Median of {{ marketSuggestion.sample_size }} eBay listings, €{{ formatMoney(marketSuggestion.price_min) }}-€{{ formatMoney(marketSuggestion.price_max) }})
             </div>
-            <div class="market-suggestion-actions">
-              <button class="btn btn-secondary" @click="setMarketSuggestionAsCurrentValue" :disabled="settingSuggestedValue">
+            <div class="market-suggestion-actions mt-2">
+              <button class="btn btn-primary btn-sm" @click="setMarketSuggestionAsCurrentValue" :disabled="settingSuggestedValue">
                 {{ settingSuggestedValue ? 'Saving...' : 'Set as current value' }}
               </button>
-              <button class="btn btn-secondary" @click="dismissMarketSuggestion">Dismiss</button>
+              <button class="btn btn-secondary btn-sm" @click="dismissMarketSuggestion">Dismiss</button>
             </div>
           </div>
-          <div v-if="rawgReference" class="rawg-reference">
-            <div class="rawg-title">RAWG reference links:</div>
-            <a v-if="rawgReference.rawg_url" :href="rawgReference.rawg_url" target="_blank" rel="noopener" class="rawg-link">
-              Open RAWG game page
-            </a>
-            <div v-if="rawgReference.store_links?.length" class="rawg-stores">
+
+          <div v-if="rawgReference" class="rawg-reference mt-3">
+            <div class="rawg-title text-muted mb-1">RAWG reference links:</div>
+            <div class="flex gap-2 flex-wrap">
+              <a v-if="rawgReference.rawg_url" :href="rawgReference.rawg_url" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+                🎮 RAWG.io Game Page
+              </a>
               <a
                 v-for="(store, idx) in rawgReference.store_links"
                 :key="`${store.url}-${idx}`"
                 :href="store.url"
                 target="_blank"
                 rel="noopener"
-                class="rawg-link"
+                class="btn btn-secondary btn-sm"
               >
                 {{ store.name || 'Store' }}
               </a>
@@ -239,54 +255,63 @@
           <div v-if="priceHistory.length >= 2" class="price-chart-wrapper mt-3">
             <canvas ref="priceChartEl"></canvas>
           </div>
-          <p v-else-if="priceHistory.length === 1" class="text-muted price-chart-hint">
-            Add one more entry to see the history chart.
-          </p>
-
-          <!-- Manual Entry -->
-          <div class="manual-entry mt-3">
-            <div class="manual-entry-label">Add Manual Entry</div>
-            <div class="manual-entry-fields">
-              <div class="manual-field">
-                <span class="p-label">Loose (€)</span>
-                <input v-model.number="manualEntry.loose_price" type="number" step="0.01" placeholder="—" />
-              </div>
-              <div class="manual-field">
-                <span class="p-label">CIB (€)</span>
-                <input v-model.number="manualEntry.complete_price" type="number" step="0.01" placeholder="—" />
-              </div>
-              <div class="manual-field">
-                <span class="p-label">New (€)</span>
-                <input v-model.number="manualEntry.new_price" type="number" step="0.01" placeholder="—" />
-              </div>
-              <button class="btn btn-secondary" @click="addManualEntry" :disabled="manualSaving">
-                {{ manualSaving ? 'Saving...' : '+ Add Entry' }}
-              </button>
-            </div>
+          <!-- Empty State Chart Info -->
+          <div v-else class="empty-chart-state mt-4">
+            <div class="icon">📈</div>
+            <h4>No Price Trends Yet</h4>
+            <p>Fetch the market price directly above to start charting the value of your game over time.</p>
           </div>
-
-          <div v-if="priceHistory.length" class="price-history-list mt-3">
-            <div class="manual-entry-label">Recent Entries</div>
-            <div
-              v-for="entry in recentPriceEntries"
-              :key="entry.id"
-              class="price-history-row"
-            >
-              <div class="price-history-main">
-                <span class="price-history-date">{{ formatDate(entry.fetched_at) }}</span>
-                <span :class="`source-pill source-${entry.source}`">{{ entry.source }}</span>
-                <span class="price-history-value">{{ entryDisplayValue(entry) }}</span>
+          
+          <details class="advanced-price-tools mt-4">
+            <summary class="text-muted text-sm cursor-pointer hover:text-white transition">Show Advanced Entry Options</summary>
+            
+            <!-- Manual Entry -->
+            <div class="manual-entry mt-3 p-3">
+              <div class="manual-entry-label mb-2">Add Manual Price Point</div>
+              <div class="manual-entry-fields">
+                <div class="manual-field">
+                  <span class="p-label text-xs">Loose (€)</span>
+                  <input v-model.number="manualEntry.loose_price" type="number" step="0.01" class="search-input py-1 px-2" placeholder="—" />
+                </div>
+                <div class="manual-field">
+                  <span class="p-label text-xs">CIB (€)</span>
+                  <input v-model.number="manualEntry.complete_price" type="number" step="0.01" class="search-input py-1 px-2" placeholder="—" />
+                </div>
+                <div class="manual-field">
+                  <span class="p-label text-xs">New (€)</span>
+                  <input v-model.number="manualEntry.new_price" type="number" step="0.01" class="search-input py-1 px-2" placeholder="—" />
+                </div>
+                <button class="btn btn-primary" @click="addManualEntry" :disabled="manualSaving">
+                  {{ manualSaving ? 'Saving...' : '+ Add' }}
+                </button>
               </div>
-              <button
-                v-if="isManualEntry(entry)"
-                class="btn btn-secondary btn-sm"
-                :disabled="deletingEntryId === entry.id"
-                @click="removeManualEntry(entry)"
+            </div>
+
+            <div v-if="priceHistory.length" class="price-history-list mt-3">
+              <div class="manual-entry-label text-sm mb-2">Recent History Log</div>
+              <div
+                v-for="entry in recentPriceEntries"
+                :key="entry.id"
+                class="price-history-row rounded p-2 mb-1"
+                style="background: rgba(255,255,255,0.03);"
               >
-                {{ deletingEntryId === entry.id ? 'Removing…' : 'Remove' }}
-              </button>
+                <div class="price-history-main">
+                  <span class="text-xs text-muted">{{ formatDate(entry.fetched_at) }}</span>
+                  <span :class="`source-pill source-${entry.source} text-xs ml-2`">{{ entry.source }}</span>
+                  <span class="ml-auto text-sm font-semibold">{{ entryDisplayValue(entry) }}</span>
+                </div>
+                <button
+                  v-if="isManualEntry(entry)"
+                  class="btn btn-danger btn-sm ml-3"
+                  :disabled="deletingEntryId === entry.id"
+                  @click="removeManualEntry(entry)"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
-          </div>
+          </details>
+
         </div>
       </div>
     </div>
@@ -1398,62 +1423,134 @@ onMounted(async () => {
   word-break: break-word;
 }
 
-.info-card {
+.info-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0; 
+}
+
+.info-cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.chunk-card {
   background: var(--bg-light);
-  border-radius: 1rem;
-  padding: var(--card-padding);
   border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
   backdrop-filter: var(--card-blur);
   -webkit-backdrop-filter: var(--card-blur);
   box-shadow: var(--glass-shadow);
 }
 
+.chunk-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--glass-border);
+  letter-spacing: -0.01em;
+}
+
 .details-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-  margin-top: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.85rem;
 }
 
 .detail-item {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--glass-border);
-  padding: 1rem;
+  padding: 0.85rem;
   border-radius: 0.75rem;
   min-width: 0;
   overflow-wrap: anywhere;
-  transition: transform 0.2s;
+  transition: transform 0.2s, background 0.2s;
 }
+
 .detail-item:hover {
   transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.04);
   border-color: var(--glass-border-hover);
 }
 
 .detail-item label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.detail-item-pl {
+  background: transparent !important;
+  border: none !important;
+  padding: 0.85rem 0 !important;
+}
+
+.detail-item-pl span {
+  font-size: 1.15rem;
+}
+
+.pl-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: 2rem;
+  font-weight: 700;
+  margin-top: 0.25rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.pl-pill.profit {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.pl-pill.loss {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .notes {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-light);
   border: 1px solid var(--glass-border);
-  padding: 1rem;
-  border-radius: 0.75rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
+  box-shadow: var(--glass-shadow);
 }
 
 .notes label {
   display: block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--glass-border);
+  letter-spacing: -0.01em;
 }
 
 .description-text {
   white-space: normal;
-  line-height: 1.5;
+  line-height: 1.6;
   word-break: break-word;
+  color: rgba(255,255,255,0.85);
 }
 
 .description-text :deep(a) {
@@ -1461,8 +1558,37 @@ onMounted(async () => {
   text-decoration: underline;
 }
 
-.profit { color: var(--success); font-weight: bold; }
-.loss { color: #ef4444; font-weight: bold; }
+.empty-chart-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px dashed var(--glass-border);
+  border-radius: 0.75rem;
+}
+
+.empty-chart-state .icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.2));
+}
+
+.empty-chart-state h4 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--text);
+}
+
+.empty-chart-state p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 320px;
+  margin: 0;
+  line-height: 1.4;
+}
 
 /* Price section */
 .price-section {
