@@ -38,11 +38,38 @@ def _get_game_for_price_lookup(game_id: int):
 
 
 @router.post("/api/games/{game_id}/fetch-market-price")
-async def fetch_market_price(game_id: int):
+async def fetch_market_price(game_id: int, source: Optional[str] = None):
     """Primary source: PriceCharting scraper. Fallback: eBay Browse."""
     game = _get_game_for_price_lookup(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+
+    ebay_enabled = all(_ebay_credentials())
+    rawg_enabled = _rawg_key() is not None
+
+    if source == 'ebay':
+        if not ebay_enabled:
+            return {"error": "eBay is not configured in Settings."}
+        ebay = await fetch_ebay_market_price(game["title"], game.get("platform_name") or "")
+        if ebay:
+            with get_db() as db:
+                db.execute(
+                    """
+                    INSERT INTO price_history
+                        (game_id, source, loose_price, complete_price, new_price, eur_rate)
+                    VALUES (?, 'ebay', ?, NULL, NULL, 1.0)
+                    """,
+                    (game_id, ebay["market_price"]),
+                )
+                db.commit()
+            return {
+                "market_price": ebay["market_price"],
+                "source": "ebay",
+                "sample_size": ebay["sample_size"],
+                "price_min": ebay["price_min"],
+                "price_max": ebay["price_max"],
+            }
+        return {"error": "No eBay listings found for this game."}
 
     ebay_enabled = all(_ebay_credentials())
     rawg_enabled = _rawg_key() is not None

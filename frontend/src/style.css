@@ -80,7 +80,7 @@ body {
 }
 
 /* Navigation Base Extracted To App.vue for Scoped Glassmorphism */
-nav, .top-bar {
+.top-bar {
   background: var(--bg-light);
   backdrop-filter: var(--card-blur);
   -webkit-backdrop-filter: var(--card-blur);

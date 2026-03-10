@@ -76,6 +76,9 @@
               <summary class="btn btn-secondary btn-compact more-trigger" aria-label="More actions" title="More actions">⋮</summary>
               <div class="more-menu-list">
                 <button type="button" class="more-menu-link more-menu-btn" @click="openPriceBrowserSearch">🔎 Open in Prices</button>
+                <button type="button" class="more-menu-link more-menu-btn" @click="checkPriceEbay" :disabled="priceLoading">
+                  🛒 Fetch eBay Price
+                </button>
                 <button type="button" class="more-menu-link more-menu-btn" @click="useConsolePlaceholder" :disabled="placeholderApplying">
                   {{ placeholderApplying ? '⏳ Applying...' : '🖼 Use Console Placeholder' }}
                 </button>
@@ -509,7 +512,7 @@ function buildChart() {
               const idx = items[0]?.dataIndex
               if (idx == null) return []
               const src = ordered[idx]?.source || ''
-              const labels = { pricecharting: '📊 PriceCharting', manual: '✏️ Manual', ebay: '🛒 eBay' }
+              const labels = { pricecharting: '📊 PriceCharting', manual: '✏️ Manual', ebay: '🛒 eBay', 'Start Value': '💰 Start Value' }
               return [labels[src] || src]
             }
           }
@@ -631,10 +634,38 @@ async function checkPrice() {
       marketSuggestion.value = data
       await loadPriceHistory()
     }
-  } catch (e) {
+} catch (e) {
     priceError.value = 'Price check failed'
     console.error(e)
     notifyError('Price check failed.')
+  } finally {
+    priceLoading.value = false
+  }
+}
+
+async function checkPriceEbay() {
+  priceLoading.value = true
+  priceError.value = ''
+  marketSuggestion.value = null
+  rawgReference.value = null
+  try {
+    const res = await priceApi.check(route.params.id, 'ebay')
+    const data = res.data || {}
+    if (!res.ok) {
+      priceError.value = data?.detail?.message || data?.detail || data?.error || 'eBay price check failed'
+      notifyError(priceError.value)
+      return
+    }
+    if (data.error) {
+      priceError.value = data.error
+    } else {
+      marketSuggestion.value = data
+      await loadPriceHistory()
+    }
+  } catch (e) {
+    priceError.value = 'eBay price check failed'
+    console.error(e)
+    notifyError('eBay price check failed.')
   } finally {
     priceLoading.value = false
   }
@@ -704,7 +735,22 @@ async function editStartValue() {
 async function loadPriceHistory() {
   try {
     const res = await priceApi.history(route.params.id)
-    if (res.ok) priceHistory.value = res.data || []
+    if (res.ok) {
+      const history = res.data || []
+      // Prepend the initial purchase price (startValue) as the oldest record
+      // so the chart has a baseline instantly.
+      if (startValue.value != null && Number.isFinite(Number(startValue.value))) {
+        history.push({
+          id: 'base-price',
+          source: 'Start Value',
+          loose_price: Number(startValue.value),
+          complete_price: Number(startValue.value),
+          new_price: Number(startValue.value),
+          fetched_at: game.value?.purchase_date || game.value?.created_at || new Date(0).toISOString()
+        })
+      }
+      priceHistory.value = history
+    }
   } catch (e) {
     console.error('Failed to load price history:', e)
     notifyError('Failed to load price history.')
@@ -1041,7 +1087,6 @@ onMounted(async () => {
   position: relative;
   z-index: 2;
   border-radius: 1rem;
-  overflow: hidden;
   border: 1px solid var(--glass-border);
   backdrop-filter: var(--card-blur);
   -webkit-backdrop-filter: var(--card-blur);

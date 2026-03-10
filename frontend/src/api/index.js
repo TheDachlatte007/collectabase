@@ -32,7 +32,7 @@ export const statsApi = {
 }
 
 export const priceApi = {
-  check: (id) => apiPost(`/api/games/${id}/fetch-market-price`),
+  check: (id, source = null) => apiPost(`/api/games/${id}/fetch-market-price${source ? `?source=${source}` : ''}`),
   history: (id) => apiGet(`/api/games/${id}/price-history`),
   manual: (id, payload) => apiPost(`/api/games/${id}/price-manual`, payload),
   deleteHistory: (id, entryId) => apiDelete(`/api/games/${id}/price-history/${entryId}`),
