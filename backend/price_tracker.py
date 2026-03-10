@@ -655,9 +655,10 @@ async def search_catalog(
     offset = (page - 1) * limit
 
     with get_db() as db:
-        total = db.execute(
-            f"SELECT COUNT(*) FROM price_catalog {where}", params
-        ).fetchone()[0]
+        count_row = db.execute(
+            f"SELECT COUNT(*) as count FROM price_catalog {where}", tuple(params)
+        ).fetchone()
+        total = count_row["count"] if count_row else 0
 
         rows = db.execute(
             f"""
@@ -666,7 +667,7 @@ async def search_catalog(
             ORDER BY {sort} {order_dir}
             LIMIT ? OFFSET ?
             """,
-            params + [limit, offset],
+            tuple(params + [limit, offset]),
         ).fetchall()
 
     return {
