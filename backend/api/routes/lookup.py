@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 
 from ..errors import bad_request, not_found
 from ..security import require_admin_access
-from ..schemas import BarcodeLookup, IGDBSearch
+from ..schemas import BarcodeLookup, TitleSearch, IGDBSearch
 from ...database import dict_from_row, get_db, set_app_meta
 from ... import jobs
 from ...services.lookup_service import (
@@ -17,6 +17,9 @@ from ...services.lookup_service import (
     lookup_gametdb_title,
     lookup_igdb_title,
     lookup_rawg_title,
+    lookup_comicvine_title,
+    lookup_hobbydb_title,
+    lookup_mfc_title,
     make_console_placeholder_data_url,
     normalize_barcode,
 )
@@ -110,8 +113,20 @@ async def lookup_rawg(search: IGDBSearch):
 
 
 @router.post("/api/lookup/combined")
-async def lookup_combined(search: IGDBSearch):
+async def lookup_combined(search: TitleSearch):
     return await lookup_combined_title(search.title)
+
+@router.post("/api/lookup/comicvine")
+async def lookup_comicvine(search: TitleSearch):
+    return await lookup_comicvine_title(search.title)
+
+@router.post("/api/lookup/hobbydb")
+async def lookup_hobbydb(search: TitleSearch):
+    return await lookup_hobbydb_title(search.title)
+
+@router.post("/api/lookup/mfc")
+async def lookup_mfc(search: TitleSearch):
+    return await lookup_mfc_title(search.title)
 
 
 @router.post("/api/lookup/barcode")

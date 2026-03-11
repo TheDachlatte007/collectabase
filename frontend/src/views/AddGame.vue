@@ -5,8 +5,14 @@
     <div class="form-layout">
       <!-- Metadata Search -->
       <div class="card mb-3">
-        <h3>Search Metadata (IGDB / RAWG / GameTDB)</h3>
+        <h3>Search Metadata</h3>
         <div class="flex gap-2 mb-2 search-row">
+          <select v-model="searchProvider" class="filter-select w-auto">
+            <option value="combined">Games (IGDB/RAWG/GTDB)</option>
+            <option value="comicvine">Comics (ComicVine)</option>
+            <option value="hobbydb">Figures (HobbyDB)</option>
+            <option value="mfc">Anime Figures (MFC)</option>
+          </select>
           <input v-model="igdbSearch" placeholder="Search by title..." @keyup.enter="searchIgdb" />
           <button @click="searchIgdb" class="btn btn-secondary search-btn" :disabled="igdbLoading">
             {{ igdbLoading ? 'Searching...' : 'Search' }}
@@ -60,11 +66,21 @@
           </div>
 
           <div class="form-group">
+            <label>Quantity</label>
+            <input v-model.number="game.quantity" type="number" min="1" step="1" required />
+          </div>
+
+          <div class="form-group">
             <label>Type</label>
             <select v-model="game.item_type">
               <option value="game">Game</option>
               <option value="console">Console</option>
+              <option value="controller">Controller</option>
               <option value="accessory">Accessory</option>
+              <option value="figure">Figure / Amiibo</option>
+              <option value="manga">Manga</option>
+              <option value="comic">Comic</option>
+              <option value="funko">Funko Pop</option>
               <option value="misc">Misc</option>
             </select>
           </div>
@@ -258,7 +274,8 @@ const saving = ref(false)
 const igdbSearch = ref('')
 const igdbResults = ref([])
 const igdbLoading = ref(false)
-const searchErrors = ref({ igdb: null, rawg: null, gametdb: null })
+const searchProvider = ref('combined')
+const searchErrors = ref({ igdb: null, rawg: null, gametdb: null, comicvine: null, hobbydb: null, mfc: null })
 const sourceFilter = ref('all')
 const isEditMode = ref(false)
 const editId = ref(null)
@@ -280,13 +297,13 @@ let scanFrame = null
 let zxingControls = null
 
 const providerErrorText = computed(() => {
-  const entries = Object.entries(searchErrors.value || {}).filter(([, value]) => !!value)
+  const entries = Object.entries(searchErrors.value || {}).filter(([k, value]) => !!value && k !== 'results')
   if (!entries.length) return ''
   return `Some providers are unavailable: ${entries.map(([key, value]) => `${key.toUpperCase()} (${value})`).join(' · ')}`
 })
 
 const sourceCounts = computed(() => {
-  const counts = { igdb: 0, rawg: 0, gametdb: 0 }
+  const counts = { igdb: 0, rawg: 0, gametdb: 0, comicvine: 0, hobbydb: 0, mfc: 0 }
   for (const item of igdbResults.value) {
     const key = String(item?.source || '').toLowerCase()
     if (key in counts) counts[key] += 1
@@ -299,6 +316,9 @@ const sourceOptions = computed(() => [
   { value: 'igdb', label: `IGDB (${sourceCounts.value.igdb})` },
   { value: 'rawg', label: `RAWG (${sourceCounts.value.rawg})` },
   { value: 'gametdb', label: `GameTDB (${sourceCounts.value.gametdb})` },
+  { value: 'comicvine', label: `ComicVine (${sourceCounts.value.comicvine})` },
+  { value: 'hobbydb', label: `HobbyDB (${sourceCounts.value.hobbydb})` },
+  { value: 'mfc', label: `MFC (${sourceCounts.value.mfc})` },
 ])
 
 const selectedPlatformName = computed(() => {
@@ -333,6 +353,7 @@ const game = ref({
   title: '',
   platform_id: '',
   item_type: 'game',
+  quantity: 1,
   barcode: '',
   region: '',
   condition: '',
@@ -343,6 +364,9 @@ const game = ref({
   notes: '',
   is_wishlist: false,
   igdb_id: null,
+  comicvine_id: null,
+  hobbydb_id: null,
+  mfc_id: null,
   cover_url: null,
   genre: null,
   description: null,
@@ -368,6 +392,7 @@ async function loadGame(id) {
         title: data.title || '',
         platform_id: data.platform_id || '',
         item_type: data.item_type || 'game',
+        quantity: data.quantity ?? 1,
         barcode: data.barcode || '',
         region: data.region || '',
         condition: data.condition || '',
@@ -378,6 +403,9 @@ async function loadGame(id) {
         notes: data.notes || '',
         is_wishlist: data.is_wishlist || false,
         igdb_id: data.igdb_id || null,
+        comicvine_id: data.comicvine_id || null,
+        hobbydb_id: data.hobbydb_id || null,
+        mfc_id: data.mfc_id || null,
         cover_url: data.cover_url || null,
         genre: data.genre || null,
         description: data.description || null,
@@ -399,9 +427,10 @@ async function searchIgdb() {
   if (!igdbSearch.value) return
   igdbLoading.value = true
   sourceFilter.value = 'all'
-  searchErrors.value = { igdb: null, rawg: null, gametdb: null }
+  searchErrors.value = { igdb: null, rawg: null, gametdb: null, comicvine: null, hobbydb: null, mfc: null }
   try {
-    const res = await lookupApi.combined(igdbSearch.value)
+    const apiCall = lookupApi[searchProvider.value] || lookupApi.combined
+    const res = await apiCall(igdbSearch.value)
     const data = res.data || {}
     igdbResults.value = (data.results && Array.isArray(data.results) ? data.results : [
       ...(data.igdb || []),
@@ -421,6 +450,9 @@ function sourceLabel(source) {
   const normalized = String(source || '').toLowerCase()
   if (normalized === 'gametdb') return '🖼️ GameTDB'
   if (normalized === 'rawg') return '🎮 RAWG'
+  if (normalized === 'comicvine') return '🦸 ComicVine'
+  if (normalized === 'hobbydb') return '🤖 HobbyDB'
+  if (normalized === 'mfc') return '🌸 MFC'
   return '🎮 IGDB'
 }
 
@@ -655,6 +687,24 @@ function fillFromIgdb(result) {
       const match = platforms.value.find(p => p.name.toLowerCase().includes(platformName.toLowerCase()))
       if (match) game.value.platform_id = match.id
     }
+  }
+
+  if (result.source === 'comicvine') {
+    game.value.comicvine_id = result.comicvine_id
+    game.value.publisher = result.publisher || game.value.publisher
+    game.value.description = result.description || game.value.description
+    game.value.release_date = result.release_date || game.value.release_date
+    game.value.item_type = 'comic'
+  }
+
+  if (result.source === 'hobbydb') {
+    game.value.hobbydb_id = result.hobbydb_id
+    game.value.item_type = 'figure' // Or 'funko' depending on HobbyDB category
+  }
+
+  if (result.source === 'mfc') {
+    game.value.mfc_id = result.mfc_id
+    game.value.item_type = 'figure'
   }
 
   igdbResults.value = []
@@ -979,6 +1029,10 @@ onUnmounted(() => {
 
 .search-btn {
   flex-shrink: 0;
+}
+
+.w-auto {
+  width: auto;
 }
 
 .cover-preview-row {

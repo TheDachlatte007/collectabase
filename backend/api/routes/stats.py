@@ -10,19 +10,19 @@ async def get_stats():
     with get_db() as db:
         total_games = db.execute("SELECT COUNT(*) FROM games WHERE is_wishlist = 0").fetchone()[0]
         total_value = db.execute(
-            "SELECT COALESCE(SUM(COALESCE(current_value, 0)), 0) FROM games WHERE is_wishlist = 0"
+            "SELECT COALESCE(SUM(COALESCE(current_value, 0) * quantity), 0) FROM games WHERE is_wishlist = 0"
         ).fetchone()[0]
         purchase_value = db.execute(
-            "SELECT COALESCE(SUM(COALESCE(purchase_price, 0)), 0) FROM games WHERE is_wishlist = 0"
+            "SELECT COALESCE(SUM(COALESCE(purchase_price, 0) * quantity), 0) FROM games WHERE is_wishlist = 0"
         ).fetchone()[0]
         wishlist_count = db.execute("SELECT COUNT(*) FROM games WHERE is_wishlist = 1").fetchone()[0]
 
         cursor = db.execute(
             """
             SELECT p.name,
-                   COUNT(*) as count,
-                   COALESCE(SUM(COALESCE(g.current_value, 0)), 0) as value,
-                   COALESCE(SUM(COALESCE(g.purchase_price, 0)), 0) as invested
+                   SUM(g.quantity) as count,
+                   COALESCE(SUM(COALESCE(g.current_value, 0) * g.quantity), 0) as value,
+                   COALESCE(SUM(COALESCE(g.purchase_price, 0) * g.quantity), 0) as invested
             FROM games g
             JOIN platforms p ON g.platform_id = p.id
             WHERE g.is_wishlist = 0
@@ -42,7 +42,7 @@ async def get_stats():
 
         cursor = db.execute(
             """
-            SELECT condition, COUNT(*) as count
+            SELECT condition, SUM(quantity) as count
             FROM games
             WHERE is_wishlist = 0 AND condition IS NOT NULL
             GROUP BY condition
@@ -52,9 +52,9 @@ async def get_stats():
 
         cursor = db.execute(
             """
-            SELECT item_type, COUNT(*) as count,
-                   COALESCE(SUM(COALESCE(current_value, 0)), 0) as value,
-                   COALESCE(SUM(COALESCE(purchase_price, 0)), 0) as invested
+            SELECT item_type, SUM(quantity) as count,
+                   COALESCE(SUM(COALESCE(current_value, 0) * quantity), 0) as value,
+                   COALESCE(SUM(COALESCE(purchase_price, 0) * quantity), 0) as invested
             FROM games
             WHERE is_wishlist = 0
             GROUP BY item_type
@@ -68,6 +68,33 @@ async def get_stats():
             item["invested"] = round(float(item.get("invested") or 0), 2)
             by_type.append(item)
 
+        cursor = db.execute(
+            """
+            SELECT id, title, cover_url, current_value, purchase_price, 
+                   COALESCE(current_value, 0) - COALESCE(purchase_price, 0) as profit_loss
+            FROM games
+            WHERE is_wishlist = 0
+            ORDER BY current_value DESC
+            LIMIT 5
+            """
+        )
+        top_valuable = [dict_from_row(row) for row in cursor.fetchall()]
+
+        cursor = db.execute(
+            """
+            SELECT id, title, cover_url, current_value, purchase_price, 
+                   (COALESCE(current_value, 0) - COALESCE(purchase_price, 0)) as profit_loss,
+                   CASE WHEN COALESCE(purchase_price, 0) > 0 
+                        THEN ((COALESCE(current_value, 0) - purchase_price) / purchase_price) * 100 
+                        ELSE 0 END as percent_gain
+            FROM games
+            WHERE is_wishlist = 0 AND purchase_price > 0
+            ORDER BY percent_gain DESC
+            LIMIT 5
+            """
+        )
+        top_gainers = [dict_from_row(row) for row in cursor.fetchall()]
+
     return {
         "total_games": total_games,
         "total_value": round(total_value, 2),
@@ -77,4 +104,33 @@ async def get_stats():
         "by_platform": by_platform,
         "by_condition": by_condition,
         "by_type": by_type,
+        "top_valuable": top_valuable,
+        "top_gainers": top_gainers,
     }
+
+
+@router.get("/api/stats/history")
+async def get_stats_history(days: int = 30):
+    with get_db() as db:
+        cursor = db.execute(
+            """
+            SELECT recorded_at, total_value, game_value, hardware_value
+            FROM value_history
+            ORDER BY recorded_at DESC
+            LIMIT ?
+            """,
+            (days,)
+        )
+        rows = cursor.fetchall()
+
+    history = []
+    for row in reversed(rows):
+        item = dict_from_row(row)
+        history.append({
+            "date": item["recorded_at"],
+            "total": round(item.get("total_value") or 0, 2),
+            "games": round(item.get("game_value") or 0, 2),
+            "hardware": round(item.get("hardware_value") or 0, 2),
+        })
+
+    return history

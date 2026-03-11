@@ -1,0 +1,47 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys; import traceback; f = open('error.log', 'w'); sys.stderr = f; import backend.main
+                                                                              ^^^^^^^^^^^^^^^^^^^
+  File "B:\Code\collectabase\backend\main.py", line 14, in <module>
+    from .api.routes.games import router as games_router
+  File "B:\Code\collectabase\backend\api\routes\games.py", line 8, in <module>
+    from ...database import dict_from_row, get_db
+  File "B:\Code\collectabase\backend\database.py", line 7, in <module>
+    from .db.session import SessionLocal
+  File "B:\Code\collectabase\backend\db\session.py", line 2, in <module>
+    from sqlalchemy import create_engine
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\__init__.py", line 13, in <module>
+    from .engine import AdaptedConnection as AdaptedConnection
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\engine\__init__.py", line 18, in <module>
+    from . import events as events
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\engine\events.py", line 19, in <module>
+    from .base import Connection
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 30, in <module>
+    from .interfaces import BindTyping
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\engine\interfaces.py", line 38, in <module>
+    from ..sql.compiler import Compiled as Compiled
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\sql\__init__.py", line 11, in <module>
+    from .compiler import COLLECT_CARTESIAN_PRODUCTS as COLLECT_CARTESIAN_PRODUCTS
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\sql\compiler.py", line 60, in <module>
+    from . import crud
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\sql\crud.py", line 34, in <module>
+    from . import dml
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\sql\dml.py", line 35, in <module>
+    from . import util as sql_util
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\sql\util.py", line 46, in <module>
+    from .ddl import sort_tables as sort_tables  # noqa: F401
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\sql\ddl.py", line 30, in <module>
+    from .elements import ClauseElement
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 760, in <module>
+    class SQLCoreOperations(Generic[_T], ColumnOperators, TypingOnly):
+    ...<387 lines>...
+                ...
+  File "C:\Users\scheb\AppData\Local\Programs\Python\Python313\Lib\typing.py", line 1269, in _generic_init_subclass
+    super(Generic, cls).__init_subclass__(*args, **kwargs)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "B:\Code\collectabase\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 1983, in __init_subclass__
+    raise AssertionError(
+    ...<2 lines>...
+    )
+AssertionError: Class <class 'sqlalchemy.sql.elements.SQLCoreOperations'> directly inherits TypingOnly but has additional attributes {'__firstlineno__', '__static_attributes__'}.

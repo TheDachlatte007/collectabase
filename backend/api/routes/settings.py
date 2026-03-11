@@ -41,6 +41,10 @@ class SecretsUpdate(BaseModel):
     pricecharting_token: str | None = None
     clear: list[str] = Field(default_factory=list)
 
+class SchedulerUpdate(BaseModel):
+    interval: int
+
+
 
 _SECRET_FIELDS = {
     "igdb_client_id": "cfg:igdb_client_id",
@@ -175,9 +179,18 @@ async def settings_info():
             "last_catalog_scrape_at",
             "last_catalog_scrape_platforms",
             "last_catalog_scrape_total",
+            "apscheduler_interval",
         ]
     )
-    scheduler = _workflow_scheduler_status()
+    
+    interval = int(meta.get("apscheduler_interval", 0))
+    scheduler = {
+        "scheduler_enabled": interval > 0,
+        "scheduler_type": "internal",
+        "scheduler_cron": f"Every {interval} hours" if interval > 0 else "Off",
+        "scheduler_interval": interval,
+    }
+
     admin_status = admin_protection_status()
 
     def _meta_value(key, default=None):
@@ -260,6 +273,12 @@ async def update_secrets(payload: SecretsUpdate, _admin: None = Depends(require_
 
     return {"ok": True, "updated": updated}
 
+@router.post("/api/settings/scheduler")
+async def update_scheduler_settings(payload: SchedulerUpdate, _admin: None = Depends(require_admin_access)):
+    set_app_meta("apscheduler_interval", str(payload.interval))
+    from ...scheduler import update_scheduler
+    update_scheduler()
+    return {"ok": True, "interval": payload.interval}
 
 @router.post("/api/settings/clear-covers")
 async def clear_all_covers(_admin: None = Depends(require_admin_access)):

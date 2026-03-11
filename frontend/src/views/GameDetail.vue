@@ -9,9 +9,10 @@
 
     <div v-else class="detail-layout">
       <!-- LEFT COLUMN -->
-      <div class="card cover-card">
-        <div class="cover-large">
-          <img v-if="currentCoverSrc" :src="currentCoverSrc" class="cover-image" @error="onDetailCoverError" />
+      <div class="left-column">
+        <div class="card cover-card">
+          <div class="cover-large">
+            <img v-if="currentCoverSrc" :src="currentCoverSrc" class="cover-image" @error="onDetailCoverError" />
           <span v-else>{{ coverEmoji(game?.item_type) }}</span>
           <button
             v-if="game.cover_url && !isSvgDataCover(game.cover_url)"
@@ -54,6 +55,37 @@
           </details>
           <span v-if="coverUploadError" class="cover-upload-error">{{ coverUploadError }}</span>
         </div>
+      </div>
+
+      <!-- IMAGE GALLERY -->
+      <div class="card mt-3">
+        <h3 class="chunk-title m-0 mb-2">Image Gallery</h3>
+        <div v-if="imagesLoading" class="text-muted text-sm">Loading gallery...</div>
+        <div v-else class="item-gallery-grid">
+          <div v-for="img in itemImages" :key="img.id" class="gallery-thumb-wrap">
+            <img :src="img.image_url" class="gallery-thumb" loading="lazy" />
+            <div class="gallery-thumb-actions">
+              <button type="button" class="btn btn-sm btn-primary" title="Set as Cover" @click="setPrimaryItemImage(img.id)">🌟</button>
+              <button type="button" class="btn btn-sm btn-danger margin-left-auto" title="Delete Image" @click="deleteItemImage(img.id)">🗑</button>
+            </div>
+            <div v-if="img.is_primary" class="primary-badge">Cover</div>
+          </div>
+          
+          <div class="gallery-upload-wrap">
+            <input
+              ref="galleryFileInput"
+              type="file"
+              accept="image/*"
+              style="display:none"
+              multiple
+              @change="onGalleryFileSelected"
+            />
+            <button type="button" class="btn btn-secondary gallery-upload-btn" @click="triggerGalleryUpload" :disabled="galleryUploading">
+              {{ galleryUploading ? '⏳' : '+ Add' }}
+            </button>
+          </div>
+        </div>
+      </div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -122,6 +154,10 @@
               <div v-if="game.condition" class="detail-item">
                 <label>Condition</label>
                 <span>{{ game.condition }}</span>
+              </div>
+              <div v-if="game.quantity" class="detail-item">
+                <label>Quantity</label>
+                <span>{{ game.quantity }}</span>
               </div>
               <div v-if="game.completeness" class="detail-item">
                 <label>Completeness</label>
@@ -381,8 +417,10 @@ const rawgReference = ref(null)
 const settingSuggestedValue = ref(false)
 const priceChartEl = ref(null)
 const coverFileInput = ref(null)
+const galleryFileInput = ref(null)
 const coverUploadMenu = ref(null)
 const coverUploading = ref(false)
+const galleryUploading = ref(false)
 const coverUploadError = ref('')
 const placeholderApplying = ref(false)
 const coverGalleryOpen = ref(false)
@@ -391,6 +429,8 @@ const coverGalleryApplying = ref(false)
 const coverGalleryError = ref('')
 const coverGalleryFilter = ref('')
 const coverGalleryItems = ref([])
+const itemImages = ref([])
+const imagesLoading = ref(false)
 const manualEntry = ref({ loose_price: null, complete_price: null, new_price: null })
 const manualSaving = ref(false)
 const deletingEntryId = ref(null)
@@ -889,6 +929,7 @@ async function loadGame() {
         startValue.value = Number.isFinite(v) ? v : null
       }
       await ensureNonGameCover()
+      await loadItemImages()
     }
   } catch (e) {
     console.error('Failed to load game:', e)
@@ -1021,6 +1062,104 @@ async function onCoverFileSelected(event) {
   }
 }
 
+async function loadItemImages() {
+  imagesLoading.value = true
+  try {
+    const res = await gamesApi.getImages(route.params.id)
+    if (res.ok) {
+      itemImages.value = res.data || []
+    }
+  } catch (e) {
+    console.error('Failed to load images:', e)
+  } finally {
+    imagesLoading.value = false
+  }
+}
+
+function triggerGalleryUpload() {
+  if (galleryUploading.value) return
+  galleryFileInput.value?.click()
+}
+
+async function onGalleryFileSelected(event) {
+  const files = event.target.files
+  if (!files || !files.length) return
+  
+  galleryUploading.value = true
+  let okCount = 0
+  
+  try {
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        notifyError(`File ${file.name} exceeds 5 MB limit.`)
+        continue
+      }
+      const form = new FormData()
+      form.append('file', file)
+      const res = await gamesApi.uploadCover(form) // use same endpoint to upload to storage
+      if (res.ok) {
+        // add to item_images
+        const { url } = res.data
+        const addRes = await gamesApi.uploadImage(route.params.id, { image_url: url })
+        if (addRes.ok) {
+          okCount++
+          if (addRes.data.is_primary) {
+            game.value.cover_url = url
+            coverHasError.value = false
+          }
+        }
+      } else {
+        notifyError(`Failed to upload ${file.name}.`)
+      }
+    }
+    
+    if (okCount > 0) {
+      notifySuccess(`Uploaded ${okCount} image(s).`)
+      await loadItemImages()
+    }
+  } catch (e) {
+    console.error('Gallery upload error:', e)
+    notifyError('Gallery upload failed.')
+  } finally {
+    galleryUploading.value = false
+    event.target.value = ''
+  }
+}
+
+async function deleteItemImage(imgId) {
+  if (!confirm('Are you sure you want to delete this image?')) return
+  try {
+    const res = await gamesApi.deleteImage(route.params.id, imgId)
+    if (res.ok) {
+      notifySuccess('Image deleted.')
+      await loadItemImages()
+      // reload game in case primary cover changed
+      const gameRes = await gamesApi.get(route.params.id)
+      if (gameRes.ok) game.value.cover_url = gameRes.data.cover_url
+    } else {
+      notifyError('Failed to delete image.')
+    }
+  } catch (e) {
+    console.error('Error deleting image:', e)
+  }
+}
+
+async function setPrimaryItemImage(imgId) {
+  try {
+    const res = await gamesApi.setPrimaryImage(route.params.id, imgId)
+    if (res.ok) {
+      notifySuccess('Cover updated.')
+      await loadItemImages()
+      const gameRes = await gamesApi.get(route.params.id)
+      if (gameRes.ok) game.value.cover_url = gameRes.data.cover_url
+    } else {
+      notifyError('Failed to set cover.')
+    }
+  } catch (e) {
+    console.error('Error setting cover:', e)
+  }
+}
+
 async function removeCover() {
   const saved = await saveCoverUrl('')
   if (saved) notifySuccess('Cover removed.')
@@ -1081,6 +1220,12 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 300px 1fr;
   gap: 2rem;
+}
+
+.left-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 @media (max-width: 768px) {

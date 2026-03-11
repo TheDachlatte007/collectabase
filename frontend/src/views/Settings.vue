@@ -203,21 +203,32 @@
 
     <p class="section-label">Automation</p>
     <div class="card mb-3">
-      <h3 class="mb-2">Scheduler Status</h3>
-      <div class="scheduler-status">
-        <span :class="schedulerEnabled ? 'status-ok' : 'status-warn'">
-          {{ schedulerEnabled ? '✅ Enabled' : '⚠️ Not enabled' }}
-        </span>
-        <span class="text-muted">{{ schedulerTypeLabel }}</span>
-      </div>
-      <div class="info-grid mt-2">
-        <div class="info-item">
-          <label>Cron</label>
-          <span>{{ info.scheduler_cron || '—' }}</span>
+      <h3 class="mb-2">Automated Price Updates</h3>
+      <p class="text-muted mb-2">Automatically fetch new PriceCharting catalog prices and update the values of your collection.</p>
+      
+      <div class="form-group mb-0 mt-3">
+        <label>Update Interval</label>
+        <div class="flex gap-2 items-center">
+          <select class="limit-input" v-model="schedulerInterval" style="width: auto;">
+            <option :value="0">Off (Manual only)</option>
+            <option :value="2">Every 2 Hours</option>
+            <option :value="6">Every 6 Hours</option>
+            <option :value="12">Every 12 Hours</option>
+            <option :value="24">Every 24 Hours</option>
+            <option :value="168">Weekly</option>
+          </select>
+          <button @click="saveScheduler" class="btn btn-secondary" :disabled="schedulerSaving">
+            {{ schedulerSaving ? 'Saving...' : 'Save' }}
+          </button>
         </div>
+      </div>
+
+      <div class="info-grid mt-3">
         <div class="info-item">
-          <label>Source</label>
-          <span>{{ info.scheduler_source || '—' }}</span>
+          <label>Status</label>
+          <span :class="schedulerEnabled ? 'status-ok' : 'status-warn'">
+            {{ schedulerEnabled ? '✅ Active (' + info.scheduler_cron + ')' : '⚠️ Disabled' }}
+          </span>
         </div>
       </div>
     </div>
@@ -361,6 +372,8 @@ const priceUpdating = ref(false)
 const priceUpdateDone = ref(false)
 const priceLimit = ref(100)
 const priceProgress = ref({ success: 0, failed: 0, total: 0, done: 0 })
+const schedulerInterval = ref(0)
+const schedulerSaving = ref(false)
 const uiPrefs = ref(loadUiPrefs())
 const localAdminKey = ref(getAdminApiKey())
 const secretsSaving = ref(false)
@@ -480,6 +493,25 @@ async function saveSecrets() {
   }
 }
 
+async function saveScheduler() {
+  schedulerSaving.value = true
+  try {
+    const res = await settingsApi.updateScheduler({ interval: schedulerInterval.value })
+    if (res.ok) {
+      notifySuccess('Scheduler updated.')
+      await loadInfo()
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to update scheduler.')
+    }
+  } catch (e) {
+    console.error('Update scheduler failed:', e)
+    notifyError('Failed to update scheduler.')
+  } finally {
+    schedulerSaving.value = false
+  }
+}
+
 function formatTimestamp(value) {
   if (!value) return 'Never'
   try {
@@ -524,8 +556,10 @@ async function loadInfo() {
   infoLoading.value = true
   try {
     const res = await settingsApi.info()
-    if (res.ok) info.value = res.data
-    else {
+    if (res.ok) {
+      info.value = res.data
+      schedulerInterval.value = res.data.scheduler_interval || 0
+    } else {
       const detail = res.data?.detail
       notifyError(detail?.message || detail || 'Failed to load settings.')
     }

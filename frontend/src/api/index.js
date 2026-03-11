@@ -8,7 +8,11 @@ export const gamesApi = {
   remove: (id) => apiDelete(`/api/games/${id}`),
   enrich: (id) => apiPost(`/api/games/${id}/enrich`),
   placeholderCover: (id) => apiPost(`/api/games/${id}/cover-placeholder`),
-  uploadCover: (formData) => apiPostForm('/api/upload/cover', formData)
+  uploadCover: (formData) => apiPostForm('/api/upload/cover', formData),
+  getImages: (id) => apiGet(`/api/games/${id}/images`),
+  uploadImage: (id, payload) => apiPost(`/api/games/${id}/images`, payload),
+  deleteImage: (id, imageId) => apiDelete(`/api/games/${id}/images/${imageId}`),
+  setPrimaryImage: (id, imageId) => apiPost(`/api/games/${id}/images/${imageId}/primary`)
 }
 
 export const platformsApi = {
@@ -17,6 +21,9 @@ export const platformsApi = {
 
 export const lookupApi = {
   combined: (title) => apiPost('/api/lookup/combined', { title }),
+  comicvine: (title) => apiPost('/api/lookup/comicvine', { title }),
+  hobbydb: (title) => apiPost('/api/lookup/hobbydb', { title }),
+  mfc: (title) => apiPost('/api/lookup/mfc', { title }),
   barcode: (barcode) => apiPost('/api/lookup/barcode', { barcode }),
   consoleFallbacks: () => apiGet('/api/console-fallbacks')
 }
@@ -28,7 +35,8 @@ export const importApi = {
 }
 
 export const statsApi = {
-  get: () => apiGet('/api/stats')
+  get: () => apiGet('/api/stats'),
+  getHistory: (days) => apiGet(`/api/stats/history${days ? `?days=${days}` : ''}`)
 }
 
 export const priceApi = {
@@ -43,6 +51,7 @@ export const priceApi = {
 export const settingsApi = {
   info: () => apiGet('/api/settings/info'),
   updateSecrets: (payload) => apiPost('/api/settings/secrets', payload),
+  updateScheduler: (payload) => apiPost('/api/settings/scheduler', payload),
   clearCovers: () => apiPost('/api/settings/clear-covers'),
   clearDatabase: () => apiDelete('/api/database/clear'),
   bulkEnrich: (limit) => apiPost(`/api/enrich/all?limit=${limit}`)

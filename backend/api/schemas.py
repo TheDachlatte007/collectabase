@@ -3,8 +3,11 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class IGDBSearch(BaseModel):
+class TitleSearch(BaseModel):
     title: str
+
+class IGDBSearch(TitleSearch):
+    pass
 
 
 class BarcodeLookup(BaseModel):
@@ -15,8 +18,12 @@ class GameCreate(BaseModel):
     title: str
     platform_id: int
     item_type: Optional[str] = "game"
+    quantity: Optional[int] = 1
     barcode: Optional[str] = None
     igdb_id: Optional[int] = None
+    comicvine_id: Optional[str] = None
+    hobbydb_id: Optional[str] = None
+    mfc_id: Optional[str] = None
     release_date: Optional[str] = None
     publisher: Optional[str] = None
     developer: Optional[str] = None
@@ -39,8 +46,12 @@ class GameUpdate(GameCreate):
     title: Optional[str] = None
     platform_id: Optional[int] = None
     item_type: Optional[str] = None
+    quantity: Optional[int] = None
     barcode: Optional[str] = None
     igdb_id: Optional[int] = None
+    comicvine_id: Optional[str] = None
+    hobbydb_id: Optional[str] = None
+    mfc_id: Optional[str] = None
     release_date: Optional[str] = None
     publisher: Optional[str] = None
     developer: Optional[str] = None

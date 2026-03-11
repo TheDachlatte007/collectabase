@@ -19,6 +19,8 @@ from .api.routes.stats import router as stats_router
 from .clz_import import router as clz_router
 from .database import init_db
 from .price_tracker import router as price_router
+from .scheduler import init_scheduler, shutdown_scheduler
+
 
 app = FastAPI(title="Collectabase", version="1.0.0")
 app.include_router(games_router)
@@ -48,6 +50,12 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    init_scheduler()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    shutdown_scheduler()
+
 
 
 @app.get("/")

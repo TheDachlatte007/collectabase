@@ -47,6 +47,9 @@ async def fetch_market_price(game_id: int, source: Optional[str] = None):
     ebay_enabled = all(_ebay_credentials())
     rawg_enabled = _rawg_key() is not None
 
+    item_type = game.get("item_type") or "game"
+    is_pc_supported = item_type in ("game", "console", "controller", "accessory", "funko", "comic")
+
     if source == 'ebay':
         if not ebay_enabled:
             return {"error": "eBay is not configured in Settings."}
@@ -71,58 +74,56 @@ async def fetch_market_price(game_id: int, source: Optional[str] = None):
             }
         return {"error": "No eBay listings found for this game."}
 
-    ebay_enabled = all(_ebay_credentials())
-    rawg_enabled = _rawg_key() is not None
+    if is_pc_supported:
+        catalog = _lookup_local_catalog_price(game["title"], game.get("platform_name") or "")
+        if not catalog:
+            # Retry without platform constraint for mismatched/legacy platform labels.
+            catalog = _lookup_local_catalog_price(game["title"], "")
+        if catalog:
+            with get_db() as db:
+                db.execute(
+                    """
+                    INSERT INTO price_history
+                        (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
+                    VALUES (?, 'pricecharting', ?, ?, ?, 1.0, ?)
+                    """,
+                    (
+                        game_id,
+                        catalog["loose_eur"],
+                        catalog["cib_eur"],
+                        catalog["new_eur"],
+                        catalog["pricecharting_id"] or None,
+                    ),
+                )
+                db.commit()
+            return {
+                "market_price": catalog["loose_eur"],
+                "source": "pricecharting",
+                "condition": "loose",
+                "matched_title": catalog["product_name"],
+                "matched_platform": catalog["platform"],
+                "match_score": catalog["match_score"],
+            }
 
-    catalog = _lookup_local_catalog_price(game["title"], game.get("platform_name") or "")
-    if not catalog:
-        # Retry without platform constraint for mismatched/legacy platform labels.
-        catalog = _lookup_local_catalog_price(game["title"], "")
-    if catalog:
-        with get_db() as db:
-            db.execute(
-                """
-                INSERT INTO price_history
-                    (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
-                VALUES (?, 'pricecharting', ?, ?, ?, 1.0, ?)
-                """,
-                (
-                    game_id,
-                    catalog["loose_eur"],
-                    catalog["cib_eur"],
-                    catalog["new_eur"],
-                    catalog["pricecharting_id"] or None,
-                ),
-            )
-            db.commit()
-        return {
-            "market_price": catalog["loose_eur"],
-            "source": "pricecharting",
-            "condition": "loose",
-            "matched_title": catalog["product_name"],
-            "matched_platform": catalog["platform"],
-            "match_score": catalog["match_score"],
-        }
+        eur_rate = await get_eur_rate()
 
-    eur_rate = await get_eur_rate()
-
-    # Always try scraper first; token does not gate this path.
-    pc = await _fetch_pricecharting_scrape(game["title"], game.get("platform_name") or "")
-    if pc:
-        loose_eur = _to_eur(pc["loose_usd"], eur_rate)
-        cib_eur = _to_eur(pc["cib_usd"], eur_rate)
-        new_eur = _to_eur(pc["new_usd"], eur_rate)
-        with get_db() as db:
-            db.execute(
-                """
-                INSERT INTO price_history
-                    (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
-                VALUES (?, 'pricecharting', ?, ?, ?, ?, ?)
-                """,
-                (game_id, loose_eur, cib_eur, new_eur, eur_rate, pc["pricecharting_id"]),
-            )
-            db.commit()
-        return {"market_price": loose_eur, "source": "pricecharting", "condition": "loose"}
+        # Always try scraper first; token does not gate this path.
+        pc = await _fetch_pricecharting_scrape(game["title"], game.get("platform_name") or "")
+        if pc:
+            loose_eur = _to_eur(pc["loose_usd"], eur_rate)
+            cib_eur = _to_eur(pc["cib_usd"], eur_rate)
+            new_eur = _to_eur(pc["new_usd"], eur_rate)
+            with get_db() as db:
+                db.execute(
+                    """
+                    INSERT INTO price_history
+                        (game_id, source, loose_price, complete_price, new_price, eur_rate, pricecharting_id)
+                    VALUES (?, 'pricecharting', ?, ?, ?, ?, ?)
+                    """,
+                    (game_id, loose_eur, cib_eur, new_eur, eur_rate, pc["pricecharting_id"]),
+                )
+                db.commit()
+            return {"market_price": loose_eur, "source": "pricecharting", "condition": "loose"}
 
     if ebay_enabled:
         ebay = await fetch_ebay_market_price(game["title"], game.get("platform_name") or "")
@@ -211,7 +212,7 @@ async def bulk_price_update(
         try:
             rows = db.execute(
                 """
-                SELECT g.id, g.title, p.name as platform_name
+                SELECT g.id, g.title, g.item_type, p.name as platform_name
                 FROM games g
                 LEFT JOIN platforms p ON g.platform_id = p.id
                 WHERE g.is_wishlist = 0
@@ -223,7 +224,7 @@ async def bulk_price_update(
         except Exception:
             rows = db.execute(
                 """
-                SELECT g.id, g.title, p.name as platform_name
+                SELECT g.id, g.title, g.item_type, p.name as platform_name
                 FROM games g
                 LEFT JOIN platforms p ON g.platform_id = p.id
                 ORDER BY g.id ASC
@@ -245,6 +246,14 @@ async def _run_bulk_price_update(job_id: str, game_list: list) -> None:
 
     for i, game in enumerate(game_list):
         jobs.update(job_id, progress=i + 1)
+
+        item_type = game.get("item_type") or "game"
+        is_pc_supported = item_type in ("game", "console", "controller", "accessory", "funko", "comic")
+        
+        if not is_pc_supported:
+            failed += 1
+            await asyncio.sleep(0.01)
+            continue
 
         catalog = _lookup_local_catalog_price(game["title"], game.get("platform_name") or "")
         if not catalog:

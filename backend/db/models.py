@@ -23,6 +23,9 @@ class Game(Base):
     platform_id = Column(Integer, ForeignKey("platforms.id"))
     barcode = Column(String)
     igdb_id = Column(Integer)
+    comicvine_id = Column(String)
+    hobbydb_id = Column(String)
+    mfc_id = Column(String)
     release_date = Column(String)
     publisher = Column(String)
     developer = Column(String)
@@ -33,6 +36,7 @@ class Game(Base):
     condition = Column(String)
     completeness = Column(String)
     location = Column(String)
+    quantity = Column(Integer, server_default="1", nullable=False)
     purchase_date = Column(String)
     purchase_price = Column(Float)
     current_value = Column(Float)
@@ -45,6 +49,28 @@ class Game(Base):
 
     platform = relationship("Platform", back_populates="games")
     price_history = relationship("PriceHistory", back_populates="game", cascade="all, delete-orphan")
+    images = relationship("ItemImage", back_populates="game", cascade="all, delete-orphan")
+
+class ItemImage(Base):
+    __tablename__ = "item_images"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
+    image_url = Column(String, nullable=False)
+    is_primary = Column(Integer, server_default="0", nullable=False)
+    sort_order = Column(Integer, server_default="0", nullable=False)
+    created_at = Column(String, server_default=func.current_timestamp())
+
+    game = relationship("Game", back_populates="images")
+
+class ValueHistory(Base):
+    __tablename__ = "value_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    recorded_at = Column(String, nullable=False)
+    total_value = Column(Float, nullable=False)
+    game_value = Column(Float, nullable=False)
+    hardware_value = Column(Float, nullable=False)
 
 class PriceHistory(Base):
     __tablename__ = "price_history"

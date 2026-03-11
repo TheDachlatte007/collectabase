@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from .price.providers.ebay import get_ebay_token
 from ..database import get_app_meta_many
 
 
@@ -618,3 +619,110 @@ async def lookup_upcitemdb_barcode(barcode: str):
         return {"results": results, "error": None}
     except Exception as e:
         return {"results": [], "error": str(e)}
+
+async def lookup_comicvine_title(title: str):
+    api_key = _env_any("COMICVINE_API_KEY")
+    if not api_key:
+        return {"error": "ComicVine API key not configured", "results": []}
+
+    try:
+        async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Collectabase/1.0"}) as client:
+            response = await client.get(
+                "https://comicvine.gamespot.com/api/search/",
+                params={
+                    "api_key": api_key,
+                    "format": "json",
+                    "query": title,
+                    "resources": "issue",
+                    "limit": 8,
+                },
+            )
+        if response.status_code >= 400:
+            return {"error": f"comicvine_status_{response.status_code}", "results": []}
+
+        payload = response.json()
+        items = payload.get("results", [])
+        results = []
+        for item in items:
+            issue_number = item.get("issue_number")
+            volume = item.get("volume", {}).get("name", "")
+            title_text = item.get("name") or f"{volume} #{issue_number}"
+            image_url = item.get("image", {}).get("medium_url")
+            
+            publisher_name = None
+            if item.get("volume") and isinstance(item.get("volume"), dict):
+                pub = item.get("volume").get("publisher")
+                if pub and isinstance(pub, dict):
+                    publisher_name = pub.get("name")
+
+            results.append(
+                {
+                    "source": "comicvine",
+                    "comicvine_id": str(item.get("id")),
+                    "title": title_text,
+                    "release_date": item.get("cover_date"),
+                    "cover_url": image_url,
+                    "description": item.get("description", ""),
+                    "publisher": publisher_name,
+                }
+            )
+        return {"results": results, "error": None}
+    except Exception as e:
+        return {"error": str(e), "results": []}
+
+
+async def _lookup_ebay_search_title(title: str, category: str):
+    token = await get_ebay_token()
+    if not token:
+        return {"error": "eBay API credentials missing. Please set them in settings.", "results": []}
+
+    try:
+        # Category hint to guide the search
+        query = f"{title} {category}".strip()
+        params = {"q": query, "limit": "8"}
+        headers = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_DE"}
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.get("https://api.ebay.com/buy/browse/v1/item_summary/search", params=params, headers=headers)
+        
+        if res.status_code >= 400:
+            return {"error": f"ebay_status_{res.status_code}", "results": []}
+
+        payload = res.json()
+        items = payload.get("itemSummaries", [])
+        results = []
+        for item in items:
+            image_url = item.get("image", {}).get("imageUrl")
+            if not image_url and item.get("thumbnailImages"):
+                image_url = item["thumbnailImages"][0].get("imageUrl")
+                
+            results.append(
+                {
+                    "source": "ebay",
+                    "title": item.get("title", ""),
+                    "release_date": None,
+                    "cover_url": image_url,
+                    "description": item.get("shortDescription", ""),
+                    "publisher": item.get("brand"),
+                    "ebay_item_id": item.get("itemId"),
+                }
+            )
+        return {"results": results, "error": None}
+    except Exception as e:
+        return {"error": str(e), "results": []}
+
+async def lookup_hobbydb_title(title: str):
+    # Fallback to eBay for Funko Pop metadata
+    res = await _lookup_ebay_search_title(title, "Funko Pop")
+    for r in res.get("results", []):
+        r["source"] = "hobbydb" # Mask source so the frontend Maps it correctly
+        r["hobbydb_id"] = r.pop("ebay_item_id", None)
+    return res
+
+async def lookup_mfc_title(title: str):
+    # Fallback to eBay for Anime Figure metadata
+    res = await _lookup_ebay_search_title(title, "Anime Figure")
+    for r in res.get("results", []):
+        r["source"] = "mfc" # Mask source
+        r["mfc_id"] = r.pop("ebay_item_id", None)
+    return res

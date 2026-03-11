@@ -39,10 +39,62 @@
           <Doughnut v-if="platformChartData" :data="platformChartData" :options="donutOptions" />
         </div>
 
+        <!-- Donut: By Condition -->
+        <div class="card chart-card">
+          <h3 class="mb-2">By Condition</h3>
+          <Doughnut v-if="conditionChartData" :data="conditionChartData" :options="donutOptions" />
+        </div>
+
         <!-- Bar: Value by Type -->
         <div class="card chart-card">
           <h3 class="mb-2">Value by Type</h3>
           <Bar v-if="typeChartData" :data="typeChartData" :options="barOptions" />
+        </div>
+      </div>
+
+      <!-- Top Widgets Row -->
+      <div class="top-widgets-row mb-3" v-if="stats.top_valuable?.length || stats.top_gainers?.length">
+        <div class="card widget-card" v-if="stats.top_valuable?.length">
+          <h3 class="mb-3">Most Valuable Items</h3>
+          <div class="widget-list">
+            <div class="widget-item" v-for="item in stats.top_valuable" :key="item.id">
+              <img :src="item.cover_url || '/placeholder.png'" class="widget-img" alt="Cover" />
+              <div class="widget-info">
+                <span class="widget-title">{{ item.title }}</span>
+                <span class="widget-value text-success">€{{ formatNumber(item.current_value) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card widget-card" v-if="stats.top_gainers?.length">
+          <h3 class="mb-3">Top Gainers (vs. Purchase)</h3>
+          <div class="widget-list">
+            <div class="widget-item" v-for="item in stats.top_gainers" :key="item.id">
+              <img :src="item.cover_url || '/placeholder.png'" class="widget-img" alt="Cover" />
+              <div class="widget-info">
+                <span class="widget-title">{{ item.title }}</span>
+                <span class="widget-value text-success">+€{{ formatNumber(item.profit_loss) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historical Value Chart -->
+      <div class="card chart-card mb-3 history-card">
+        <div class="flex flex-between items-center mb-2">
+          <h3 class="m-0">Value History</h3>
+          <select v-model="historyDays" @change="loadHistory" class="filter-select select-sm">
+            <option :value="30">Last 30 Days</option>
+            <option :value="90">Last 90 Days</option>
+            <option :value="365">Last Year</option>
+          </select>
+        </div>
+        <div v-if="historyLoading" class="text-muted">Loading history...</div>
+        <div v-else-if="!historyChartData" class="text-muted">Not enough data to display history yet. It will automatically populate daily.</div>
+        <div v-else class="history-chart-wrapper">
+          <Line :data="historyChartData" :options="lineOptions" />
         </div>
       </div>
 
@@ -106,7 +158,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { statsApi } from '../api'
-import { Doughnut, Bar } from 'vue-chartjs'
+import { Doughnut, Bar, Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
   ArcElement,
@@ -115,10 +167,12 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
   Title
 } from 'chart.js'
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title)
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title)
 
 const stats = ref({
   total_games: 0,
@@ -127,8 +181,14 @@ const stats = ref({
   profit_loss: 0,
   wishlist_count: 0,
   by_platform: [],
-  by_type: []
+  by_type: [],
+  by_condition: [],
+  top_valuable: [],
+  top_gainers: []
 })
+const historyData = ref([])
+const historyDays = ref(30)
+const historyLoading = ref(false)
 const loading = ref(true)
 
 const COLORS = [
@@ -144,6 +204,19 @@ const platformChartData = computed(() => {
     datasets: [{
       data: top.map(p => p.count),
       backgroundColor: COLORS,
+      borderWidth: 2,
+      borderColor: '#1a1a2e'
+    }]
+  }
+})
+
+const conditionChartData = computed(() => {
+  if (!stats.value.by_condition?.length) return null
+  return {
+    labels: stats.value.by_condition.map(c => capitalize(c.condition) || 'Unknown'),
+    datasets: [{
+      data: stats.value.by_condition.map(c => c.count),
+      backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6'],
       borderWidth: 2,
       borderColor: '#1a1a2e'
     }]
@@ -176,14 +249,15 @@ const donutOptions = {
   }
 }
 
-const barOptions = {
+const lineOptions = {
   responsive: true,
+  maintainAspectRatio: false,
   plugins: {
     legend: { labels: { color: '#e2e8f0' } }
   },
   scales: {
     x: { ticks: { color: '#94a3b8' }, grid: { color: '#2d2d4e' } },
-    y: { ticks: { color: '#94a3b8' }, grid: { color: '#2d2d4e' } }
+    y: { ticks: { color: '#94a3b8' }, grid: { color: '#2d2d4e' }, title: { display: true, text: 'EUR', color: '#94a3b8' } }
   }
 }
 
@@ -192,7 +266,64 @@ function formatNumber(num) {
 }
 
 function capitalize(str) {
-  return str ? str.charAt(0).toUpperCase() + str.slice(1) : ''
+  if (!str) return ''
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+function formatDate(dt) {
+  if (!dt) return ''
+  const d = new Date(typeof dt === 'string' ? dt.replace(' ', 'T') : dt)
+  if (isNaN(d.getTime())) return String(dt)
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}.${mm}`
+}
+
+const historyChartData = computed(() => {
+  if (!historyData.value || historyData.value.length < 2) return null
+  // Data comes from API ordered by recorded_at DESC, so we need to reverse it to display chronologically (ASC)
+  const ordered = [...historyData.value].reverse()
+  return {
+    labels: ordered.map(h => formatDate(h.date)),
+    datasets: [
+      {
+        label: 'Total Value',
+        data: ordered.map(h => h.total),
+        borderColor: '#facc15',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 3
+      },
+      {
+        label: 'Games',
+        data: ordered.map(h => h.games),
+        borderColor: '#60a5fa',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 3
+      },
+      {
+        label: 'Hardware/Misc',
+        data: ordered.map(h => h.hardware),
+        borderColor: '#ef4444',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 3
+      }
+    ]
+  }
+})
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const res = await statsApi.getHistory(historyDays.value)
+    historyData.value = res.data || []
+  } catch (e) {
+    console.error('Failed to load history:', e)
+  } finally {
+    historyLoading.value = false
+  }
 }
 
 async function loadStats() {
@@ -206,7 +337,10 @@ async function loadStats() {
   }
 }
 
-onMounted(loadStats)
+onMounted(() => {
+  loadStats()
+  loadHistory()
+})
 </script>
 
 <style scoped>
@@ -227,7 +361,7 @@ onMounted(loadStats)
 }
 
 @media (max-width: 639px) {
-  .charts-row { grid-template-columns: 1fr; }
+  .charts-row, .top-widgets-row { grid-template-columns: 1fr; }
 
   /* KPI cards: 2 per row on phones */
   .stats-grid {
@@ -248,9 +382,43 @@ onMounted(loadStats)
     padding: 0.5rem;
     font-size: 0.875rem;
   }
+
+  .history-chart-wrapper {
+    height: 250px;
+  }
 }
 
 .chart-card { padding: 1.5rem; }
+
+.history-card {
+  width: 100%;
+}
+
+.history-chart-wrapper {
+  position: relative;
+  height: 320px;
+  width: 100%;
+}
+
+.top-widgets-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.widget-card { padding: 1.5rem; }
+.widget-list { display: flex; flex-direction: column; gap: 1rem; }
+.widget-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-md);
+}
+.widget-img { width: 40px; height: 55px; object-fit: cover; border-radius: var(--radius-sm); }
+.widget-info { display: flex; flex-direction: column; }
+.widget-title { font-weight: 500; font-size: 0.95rem; line-height: 1.2; margin-bottom: 0.25rem; }
+.widget-value { font-size: 0.85rem; font-weight: bold; }
 
 .stats-table { width: 100%; border-collapse: collapse; }
 .stats-table th,

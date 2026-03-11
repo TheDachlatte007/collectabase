@@ -54,21 +54,25 @@ async def create_game(game: GameCreate, force: bool = False):
 
     with get_db() as db:
         cursor = db.execute(
-            """
+            '''
             INSERT INTO games (
-                title, platform_id, item_type, barcode, igdb_id, release_date,
+                title, platform_id, item_type, quantity, barcode, igdb_id, comicvine_id, hobbydb_id, mfc_id, release_date,
                 publisher, developer, genre, description, cover_url,
                 region, condition, completeness, location,
                 purchase_date, purchase_price, current_value, notes,
                 is_wishlist, wishlist_max_price
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
             (
                 game.title,
                 game.platform_id,
                 game.item_type,
+                game.quantity,
                 game.barcode,
                 game.igdb_id,
+                game.comicvine_id,
+                game.hobbydb_id,
+                game.mfc_id,
                 game.release_date,
                 game.publisher,
                 game.developer,
@@ -121,8 +125,12 @@ async def update_game(game_id: int, game: GameUpdate):
             "title": game.title or existing_data["title"],
             "platform_id": game.platform_id or existing_data["platform_id"],
             "item_type": game.item_type or existing_data["item_type"],
+            "quantity": game.quantity if game.quantity is not None else existing_data["quantity"],
             "barcode": game.barcode if game.barcode is not None else existing_data["barcode"],
             "igdb_id": game.igdb_id if game.igdb_id is not None else existing_data["igdb_id"],
+            "comicvine_id": game.comicvine_id if game.comicvine_id is not None else existing_data["comicvine_id"],
+            "hobbydb_id": game.hobbydb_id if game.hobbydb_id is not None else existing_data["hobbydb_id"],
+            "mfc_id": game.mfc_id if game.mfc_id is not None else existing_data["mfc_id"],
             "release_date": game.release_date if game.release_date is not None else existing_data["release_date"],
             "publisher": game.publisher if game.publisher is not None else existing_data["publisher"],
             "developer": game.developer if game.developer is not None else existing_data["developer"],
@@ -150,7 +158,7 @@ async def update_game(game_id: int, game: GameUpdate):
         db.execute(
             """
             UPDATE games SET
-                title = ?, platform_id = ?, item_type = ?, barcode = ?, igdb_id = ?, release_date = ?,
+                title = ?, platform_id = ?, item_type = ?, quantity = ?, barcode = ?, igdb_id = ?, comicvine_id = ?, hobbydb_id = ?, mfc_id = ?, release_date = ?,
                 publisher = ?, developer = ?, genre = ?, description = ?, cover_url = ?,
                 region = ?, condition = ?, completeness = ?, location = ?,
                 purchase_date = ?, purchase_price = ?, current_value = ?, notes = ?,
@@ -161,8 +169,12 @@ async def update_game(game_id: int, game: GameUpdate):
                 merged["title"],
                 merged["platform_id"],
                 merged["item_type"],
+                merged["quantity"],
                 merged["barcode"],
                 merged["igdb_id"],
+                merged["comicvine_id"],
+                merged["hobbydb_id"],
+                merged["mfc_id"],
                 merged["release_date"],
                 merged["publisher"],
                 merged["developer"],
@@ -195,6 +207,80 @@ async def delete_game(game_id: int):
         db.execute("DELETE FROM games WHERE id = ?", (game_id,))
         db.commit()
         return {"message": "Game deleted successfully"}
+
+
+@router.get("/api/games/{game_id}/images")
+async def get_game_images(game_id: int):
+    with get_db() as db:
+        cursor = db.execute(
+            "SELECT id, image_url, is_primary, sort_order FROM item_images WHERE game_id = ? ORDER BY sort_order ASC, id ASC",
+            (game_id,)
+        )
+        return [dict_from_row(row) for row in cursor.fetchall()]
+
+
+@router.post("/api/games/{game_id}/images")
+async def add_game_image(game_id: int, payload: dict):
+    url = payload.get("image_url")
+    if not url:
+        raise conflict("image_url is required")
+
+    with get_db() as db:
+        existing = db.execute("SELECT id FROM games WHERE id = ?", (game_id,)).fetchone()
+        if not existing:
+            raise not_found("Game not found")
+
+        # if it's the first image, make it primary
+        count = db.execute("SELECT COUNT(*) FROM item_images WHERE game_id = ?", (game_id,)).fetchone()[0]
+        is_primary = 1 if count == 0 else 0
+
+        cursor = db.execute(
+            "INSERT INTO item_images (game_id, image_url, is_primary, sort_order) VALUES (?, ?, ?, ?)",
+            (game_id, url, is_primary, count)
+        )
+        new_id = cursor.lastrowid
+        
+        if is_primary:
+            db.execute("UPDATE games SET cover_url = ? WHERE id = ?", (url, game_id))
+            
+        db.commit()
+        return {"id": new_id, "image_url": url, "is_primary": bool(is_primary)}
+
+
+@router.post("/api/games/{game_id}/images/{image_id}/primary")
+async def set_primary_image(game_id: int, image_id: int):
+    with get_db() as db:
+        img = db.execute("SELECT image_url FROM item_images WHERE id = ? AND game_id = ?", (image_id, game_id)).fetchone()
+        if not img:
+            raise not_found("Image not found")
+
+        db.execute("UPDATE item_images SET is_primary = 0 WHERE game_id = ?", (game_id,))
+        db.execute("UPDATE item_images SET is_primary = 1 WHERE id = ?", (image_id,))
+        db.execute("UPDATE games SET cover_url = ? WHERE id = ?", (img[0], game_id))
+        db.commit()
+        return {"message": "Primary image updated"}
+
+
+@router.delete("/api/games/{game_id}/images/{image_id}")
+async def delete_game_image(game_id: int, image_id: int):
+    with get_db() as db:
+        img = db.execute("SELECT is_primary FROM item_images WHERE id = ? AND game_id = ?", (image_id, game_id)).fetchone()
+        if not img:
+            raise not_found("Image not found")
+        
+        db.execute("DELETE FROM item_images WHERE id = ?", (image_id,))
+        
+        if img[0]:
+            # If deleted primary, pick another one
+            next_img = db.execute("SELECT id, image_url FROM item_images WHERE game_id = ? ORDER BY sort_order ASC, id ASC LIMIT 1", (game_id,)).fetchone()
+            if next_img:
+                db.execute("UPDATE item_images SET is_primary = 1 WHERE id = ?", (next_img[0],))
+                db.execute("UPDATE games SET cover_url = ? WHERE id = ?", (next_img[1], game_id))
+            else:
+                db.execute("UPDATE games SET cover_url = NULL WHERE id = ?", (game_id,))
+                
+        db.commit()
+        return {"message": "Image deleted"}
 
 
 @router.get("/api/platforms")
