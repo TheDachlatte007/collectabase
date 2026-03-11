@@ -1,6 +1,6 @@
 <template>
   <div class="container">
-    <h1 class="mb-3">{{ isEditMode ? 'Edit Game' : 'Add Game' }}</h1>
+    <h1 class="mb-3">{{ isEditMode ? 'Edit Item' : 'Add Item' }}</h1>
 
     <div class="form-layout">
       <!-- Metadata Search -->
@@ -58,8 +58,8 @@
           </div>
           
           <div class="form-group">
-            <label>Platform *</label>
-            <select v-model="game.platform_id" required>
+            <label>Platform {{ game.item_type === 'game' ? '*' : '' }}</label>
+            <select v-model="game.platform_id" :required="game.item_type === 'game'">
               <option value="">Select platform</option>
               <option v-for="p in platforms" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
@@ -235,7 +235,7 @@
 
         <div class="flex gap-2 mt-3 form-actions">
           <button type="submit" class="btn btn-primary" :disabled="saving">
-            {{ saving ? 'Saving...' : (isEditMode ? 'Update Game' : 'Save Game') }}
+            {{ saving ? 'Saving...' : (isEditMode ? 'Update Item' : 'Save Item') }}
           </button>
           <router-link to="/" class="btn btn-secondary">Cancel</router-link>
         </div>

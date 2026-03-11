@@ -16,7 +16,7 @@ class BarcodeLookup(BaseModel):
 
 class GameCreate(BaseModel):
     title: str
-    platform_id: int
+    platform_id: Optional[int] = None
     item_type: Optional[str] = "game"
     quantity: Optional[int] = 1
     barcode: Optional[str] = None

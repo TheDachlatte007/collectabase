@@ -75,7 +75,7 @@ async def get_stats():
             FROM games
             WHERE is_wishlist = 0
             ORDER BY current_value DESC
-            LIMIT 5
+            LIMIT 15
             """
         )
         top_valuable = [dict_from_row(row) for row in cursor.fetchall()]
@@ -90,7 +90,7 @@ async def get_stats():
             FROM games
             WHERE is_wishlist = 0 AND purchase_price > 0
             ORDER BY percent_gain DESC
-            LIMIT 5
+            LIMIT 15
             """
         )
         top_gainers = [dict_from_row(row) for row in cursor.fetchall()]

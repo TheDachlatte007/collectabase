@@ -16,8 +16,8 @@
       </div>
 
       <nav class="sidebar-nav">
-        <router-link to="/" active-class="" exact-active-class="active" title="My Games">
-          <span class="nav-icon">🎮</span> <span v-show="!collapsed">My Games</span>
+        <router-link to="/" active-class="" exact-active-class="active" title="My Collection">
+          <span class="nav-icon">📚</span> <span v-show="!collapsed">My Collection</span>
         </router-link>
         <router-link to="/stats" title="Stats">
           <span class="nav-icon">📈</span> <span v-show="!collapsed">Stats</span>
@@ -31,9 +31,9 @@
       </nav>
 
       <div class="sidebar-footer">
-        <router-link to="/add" class="btn btn-primary add-btn" active-class="btn-active" title="Add Game">
+        <router-link to="/add" class="btn btn-primary add-btn" active-class="btn-active" title="Add Item">
           <span v-if="collapsed" style="font-size: 1.25rem;">+</span>
-          <span v-else>+ Add Game</span>
+          <span v-else>+ Add Item</span>
         </router-link>
       </div>
     </aside>
@@ -58,7 +58,7 @@
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           <polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
-        <span>Games</span>
+        <span>Library</span>
       </router-link>
 
       <router-link to="/stats" active-class="nav-active">

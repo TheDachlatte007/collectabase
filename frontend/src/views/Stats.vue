@@ -55,28 +55,40 @@
       <!-- Top Widgets Row -->
       <div class="top-widgets-row mb-3" v-if="stats.top_valuable?.length || stats.top_gainers?.length">
         <div class="card widget-card" v-if="stats.top_valuable?.length">
-          <h3 class="mb-3">Most Valuable Items</h3>
+          <div class="flex flex-between items-center mb-3">
+            <h3 class="m-0">Most Valuable Items</h3>
+            <button class="btn btn-sm btn-ghost" @click="showAllValuable = !showAllValuable" v-if="stats.top_valuable.length > 5">
+              {{ showAllValuable ? 'Show Less' : 'Show All' }}
+            </button>
+          </div>
           <div class="widget-list">
-            <div class="widget-item" v-for="item in stats.top_valuable" :key="item.id">
+            <router-link :to="`/game/${item.id}`" class="widget-item" v-for="item in visibleValuable" :key="item.id">
               <img :src="item.cover_url || '/placeholder.png'" class="widget-img" alt="Cover" />
               <div class="widget-info">
                 <span class="widget-title">{{ item.title }}</span>
                 <span class="widget-value text-success">€{{ formatNumber(item.current_value) }}</span>
               </div>
-            </div>
+            </router-link>
           </div>
         </div>
 
         <div class="card widget-card" v-if="stats.top_gainers?.length">
-          <h3 class="mb-3">Top Gainers (vs. Purchase)</h3>
+          <div class="flex flex-between items-center mb-3">
+            <h3 class="m-0">Top Gainers</h3>
+            <button class="btn btn-sm btn-ghost" @click="showAllGainers = !showAllGainers" v-if="stats.top_gainers.length > 5">
+              {{ showAllGainers ? 'Show Less' : 'Show All' }}
+            </button>
+          </div>
           <div class="widget-list">
-            <div class="widget-item" v-for="item in stats.top_gainers" :key="item.id">
+            <router-link :to="`/game/${item.id}`" class="widget-item" v-for="item in visibleGainers" :key="item.id">
               <img :src="item.cover_url || '/placeholder.png'" class="widget-img" alt="Cover" />
               <div class="widget-info">
                 <span class="widget-title">{{ item.title }}</span>
-                <span class="widget-value text-success">+€{{ formatNumber(item.profit_loss) }}</span>
+                <span class="widget-value" :class="item.profit_loss >= 0 ? 'text-success' : 'text-error'">
+                   {{ item.profit_loss >= 0 ? '+' : '' }}€{{ formatNumber(item.profit_loss) }}
+                </span>
               </div>
-            </div>
+            </router-link>
           </div>
         </div>
       </div>
@@ -186,6 +198,15 @@ const stats = ref({
   top_valuable: [],
   top_gainers: []
 })
+const visibleValuable = computed(() => {
+  return showAllValuable.value ? stats.value.top_valuable : stats.value.top_valuable.slice(0, 5)
+})
+const visibleGainers = computed(() => {
+  return showAllGainers.value ? stats.value.top_gainers : stats.value.top_gainers.slice(0, 5)
+})
+
+const showAllValuable = ref(false)
+const showAllGainers = ref(false)
 const historyData = ref([])
 const historyDays = ref(30)
 const historyLoading = ref(false)
@@ -350,9 +371,17 @@ onMounted(() => {
   gap: 1.5rem;
 }
 
-.stat-card { text-align: center; }
+.stat-card { 
+  text-align: center; 
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
+  cursor: default;
+}
+.stat-card:hover { 
+  transform: translateY(-5px);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.3), 0 0 20px rgba(139, 92, 246, 0.15);
+}
 .stat-card h3 { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem; }
-.stat-value { font-size: 2rem; font-weight: bold; }
+.stat-value { font-size: 2rem; font-weight: bold; transition: color 0.3s; }
 
 .charts-row {
   display: grid;
@@ -406,19 +435,36 @@ onMounted(() => {
   gap: 1.5rem;
 }
 .widget-card { padding: 1.5rem; }
-.widget-list { display: flex; flex-direction: column; gap: 1rem; }
+.widget-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .widget-item {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.5rem;
+  padding: 0.6rem;
   background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
   border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s;
 }
-.widget-img { width: 40px; height: 55px; object-fit: cover; border-radius: var(--radius-sm); }
-.widget-info { display: flex; flex-direction: column; }
-.widget-title { font-weight: 500; font-size: 0.95rem; line-height: 1.2; margin-bottom: 0.25rem; }
-.widget-value { font-size: 0.85rem; font-weight: bold; }
+.widget-item:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(139, 92, 246, 0.3);
+  transform: translateX(4px);
+}
+.widget-img { width: 44px; height: 60px; object-fit: cover; border-radius: var(--radius-sm); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+.widget-info { display: flex; flex-direction: column; overflow: hidden; }
+.widget-title { 
+  font-weight: 600; 
+  font-size: 0.95rem; 
+  line-height: 1.2; 
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.widget-value { font-size: 0.85rem; font-weight: 700; }
 
 .stats-table { width: 100%; border-collapse: collapse; }
 .stats-table th,

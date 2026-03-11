@@ -1,11 +1,11 @@
 <template>
   <div class="container">
     <div class="list-header mb-3">
-      <h1>My Games</h1>
+      <h1>My Collection</h1>
       <div class="filters">
         <input
           v-model="search"
-          placeholder="Search games..."
+          placeholder="Search collection..."
           class="search-input"
         />
         <select v-model="selectedPlatform" class="filter-select">
@@ -19,6 +19,9 @@
           <option value="game">🎮 Games</option>
           <option value="console">🖥️ Consoles</option>
           <option value="accessory">🕹️ Accessories</option>
+          <option value="figure">🧸 Figures</option>
+          <option value="comic">📚 Comics</option>
+          <option value="funko">🍿 Funko Pops</option>
           <option value="misc">📦 Misc</option>
         </select>
         <select v-model="sortBy" class="filter-select">
@@ -110,6 +113,10 @@ function typeLabel(type) {
     game: '🎮 Game',
     console: '🖥️ Console',
     accessory: '🕹️ Accessory',
+    figure: '🧸 Figure',
+    comic: '📚 Comic',
+    funko: '🍿 Funko',
+    manga: '📖 Manga',
     misc: '📦 Misc'
   }
   return labels[type] || type
