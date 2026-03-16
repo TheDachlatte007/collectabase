@@ -4,12 +4,6 @@ import os
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-import asyncio
-import logging
-import os
-from datetime import datetime
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from .database import get_db, get_app_meta_many
 from .services.price.utils import PLATFORM_SLUGS, get_eur_rate
 from .services.price.catalog import scrape_platform_catalog, _upsert_catalog_entries, _lookup_local_catalog_price

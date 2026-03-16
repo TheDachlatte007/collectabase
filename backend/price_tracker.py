@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -23,6 +24,8 @@ from .services.price.providers.pricecharting import (
 )
 
 router = APIRouter()
+
+logger = logging.getLogger("collectabase.price_tracker")
 
 def _get_game_for_price_lookup(game_id: int):
     with get_db() as db:
@@ -221,7 +224,8 @@ async def bulk_price_update(
                 """,
                 (limit,),
             ).fetchall()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Bulk price update query with is_wishlist filter failed, falling back: {e}")
             rows = db.execute(
                 """
                 SELECT g.id, g.title, g.item_type, p.name as platform_name
@@ -402,20 +406,6 @@ async def apply_catalog_price(game_id: int, payload: CatalogPriceApply):
         "matched_title": item.get("title"),
         "matched_platform": item.get("platform"),
     }
-
-
-# ── Price Catalog (scraped platform catalogs) ─────────────────────────────────
-
-
-    return response
-
-
-
-
-
-
-
-
 
 
 @router.post("/api/price-catalog/scrape")

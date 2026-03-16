@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from typing import Optional
 from urllib.parse import urljoin
@@ -17,6 +18,9 @@ from .utils import (
     _prices_differ,
     _to_eur,
 )
+
+logger = logging.getLogger("collectabase.catalog")
+
 
 def _lookup_local_catalog_price(title: str, platform_name: str):
     norm_title = _normalize_text(title)
@@ -50,7 +54,8 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
                     rows = db.execute(sql, params).fetchall()
                 if not rows:
                     rows = db.execute("SELECT * FROM price_catalog ORDER BY scraped_at DESC LIMIT 5000").fetchall()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Catalog price lookup failed for title={title!r} platform={platform_name!r}: {e}")
         return None
 
     best = None
