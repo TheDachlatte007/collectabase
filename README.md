@@ -180,3 +180,13 @@ collectabase/
 ## 📝 License
 
 MIT License. Built with ❤️ for collectors.
+
+---
+
+## Support the project
+
+If Collectabase is useful to you and you want to support development, you can support the project here:
+
+☕ Ko-fi: https://ko-fi.com/thedachlatte007
+
+Your support helps with development, testing, and maintenance.
