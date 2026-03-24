@@ -84,3 +84,59 @@ class PlatformCreate(BaseModel):
     name: str
     manufacturer: Optional[str] = None
     type: Optional[str] = None
+
+
+class LotCreate(BaseModel):
+    name: str
+    purchase_date: Optional[str] = None
+    seller: Optional[str] = None
+    purchase_price_gross: Optional[float] = 0
+    shipping_in: Optional[float] = 0
+    fees_in: Optional[float] = 0
+    other_costs: Optional[float] = 0
+    notes: Optional[str] = None
+
+
+class LotUpdate(BaseModel):
+    name: Optional[str] = None
+    purchase_date: Optional[str] = None
+    seller: Optional[str] = None
+    purchase_price_gross: Optional[float] = None
+    shipping_in: Optional[float] = None
+    fees_in: Optional[float] = None
+    other_costs: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class LotItemCreate(BaseModel):
+    game_id: Optional[int] = None
+    title_snapshot: Optional[str] = None
+    platform_snapshot: Optional[str] = None
+    item_type_snapshot: Optional[str] = None
+    estimated_value: Optional[float] = None
+    cost_basis_override: Optional[float] = None
+    status: Optional[str] = "inventory"
+    notes: Optional[str] = None
+
+
+class LotItemUpdate(BaseModel):
+    game_id: Optional[int] = None
+    unlink_game: bool = False
+    title_snapshot: Optional[str] = None
+    platform_snapshot: Optional[str] = None
+    item_type_snapshot: Optional[str] = None
+    estimated_value: Optional[float] = None
+    cost_basis_override: Optional[float] = None
+    clear_cost_basis_override: bool = False
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class LotSaleUpsert(BaseModel):
+    sold_at: Optional[str] = None
+    channel: Optional[str] = None
+    sale_price_gross: Optional[float] = 0
+    platform_fees: Optional[float] = 0
+    shipping_out: Optional[float] = 0
+    other_costs: Optional[float] = 0
+    notes: Optional[str] = None

@@ -147,6 +147,86 @@
         </div>
       </div>
 
+      <div v-if="stats.lots_summary?.total_lots" class="card chart-card mb-4 premium-glass">
+        <div class="flex flex-between items-center mb-4">
+          <h3 class="m-0 flex items-center gap-2">
+            <span class="icon">📦</span> Lots & Resale
+          </h3>
+          <router-link to="/lots" class="btn btn-sm btn-secondary">
+            Open Lots
+          </router-link>
+        </div>
+
+        <div class="lot-summary-grid mb-3">
+          <div class="lot-summary-card">
+            <span class="summary-label">Lots</span>
+            <strong>{{ stats.lots_summary.total_lots }}</strong>
+            <small>{{ stats.lots_summary.item_count }} items tracked</small>
+          </div>
+          <div class="lot-summary-card">
+            <span class="summary-label">Cost Basis</span>
+            <strong>€{{ formatNumber(stats.lots_summary.total_cost_basis) }}</strong>
+            <small>Bundle purchase total</small>
+          </div>
+          <div class="lot-summary-card">
+            <span class="summary-label">Net Sales</span>
+            <strong>€{{ formatNumber(stats.lots_summary.net_sales) }}</strong>
+            <small>Recovered from sold items</small>
+          </div>
+          <div class="lot-summary-card">
+            <span class="summary-label">Realized Profit</span>
+            <strong :class="stats.lots_summary.realized_profit >= 0 ? 'text-success' : 'text-error'">
+              {{ stats.lots_summary.realized_profit >= 0 ? '+' : '' }}€{{ formatNumber(stats.lots_summary.realized_profit) }}
+            </strong>
+            <small>Closed sales only</small>
+          </div>
+          <div class="lot-summary-card">
+            <span class="summary-label">Remaining Cost</span>
+            <strong>€{{ formatNumber(stats.lots_summary.remaining_cost_basis) }}</strong>
+            <small>Still tied to inventory</small>
+          </div>
+          <div class="lot-summary-card">
+            <span class="summary-label">Expected Remaining</span>
+            <strong>€{{ formatNumber(stats.lots_summary.expected_remaining_value) }}</strong>
+            <small>
+              Gap: €{{ formatNumber(stats.lots_summary.break_even_gap) }}
+            </small>
+          </div>
+        </div>
+
+        <table v-if="stats.lots_overview?.length" class="stats-table">
+          <thead>
+            <tr>
+              <th>Lot</th>
+              <th>Items</th>
+              <th>Cost Basis</th>
+              <th>Net Sales</th>
+              <th>Profit</th>
+              <th>Recovery</th>
+              <th>Break-even Gap</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="lot in stats.lots_overview.slice(0, 6)" :key="lot.id">
+              <td>
+                <div class="lot-name-cell">
+                  <strong>{{ lot.name }}</strong>
+                  <span v-if="lot.purchase_date">{{ lot.purchase_date }}</span>
+                </div>
+              </td>
+              <td>{{ lot.item_count }}</td>
+              <td>€{{ formatNumber(lot.total_cost_basis) }}</td>
+              <td>€{{ formatNumber(lot.net_sales) }}</td>
+              <td :class="lot.realized_profit >= 0 ? 'text-success' : 'text-error'">
+                {{ lot.realized_profit >= 0 ? '+' : '' }}€{{ formatNumber(lot.realized_profit) }}
+              </td>
+              <td>{{ formatNumber(lot.recovery_rate_pct) }}%</td>
+              <td>€{{ formatNumber(lot.break_even_gap) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- By Type Table -->
       <div v-if="stats.by_type?.length" class="card mt-3">
         <h3 class="mb-2">By Type</h3>
@@ -233,7 +313,18 @@ const stats = ref({
   by_type: [],
   by_condition: [],
   top_valuable: [],
-  top_gainers: []
+  top_gainers: [],
+  lots_summary: {
+    total_lots: 0,
+    item_count: 0,
+    total_cost_basis: 0,
+    net_sales: 0,
+    realized_profit: 0,
+    remaining_cost_basis: 0,
+    expected_remaining_value: 0,
+    break_even_gap: 0
+  },
+  lots_overview: []
 })
 const visibleValuable = computed(() => {
   return showAllValuable.value ? stats.value.top_valuable : stats.value.top_valuable.slice(0, 5)
@@ -560,6 +651,48 @@ onMounted(() => {
 
 .history-card { padding: 1.8rem; }
 .history-chart-wrapper { height: 350px; width: 100%; }
+
+.lot-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.lot-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.lot-summary-card strong {
+  font-size: 1.25rem;
+}
+
+.summary-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.lot-summary-card small {
+  color: var(--text-muted);
+}
+
+.lot-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.lot-name-cell span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
 
 .stats-table { width: 100%; border-collapse: separate; border-spacing: 0 0.5rem; }
 .stats-table th { 

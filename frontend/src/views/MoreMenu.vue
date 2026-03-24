@@ -21,6 +21,14 @@
             <div class="more-sub">Track wanted games</div>
           </div>
         </router-link>
+
+        <router-link to="/lots" class="more-card">
+          <div class="more-icon">📦</div>
+          <div class="more-copy">
+            <div class="more-title">Lots & Resale</div>
+            <div class="more-sub">Bundle cost basis and sales</div>
+          </div>
+        </router-link>
       </div>
     </div>
 
@@ -28,7 +36,7 @@
       <h2 class="more-section-title">Data & Admin</h2>
       <div class="more-grid">
         <router-link to="/import" class="more-card">
-          <div class="more-icon">📦</div>
+          <div class="more-icon">🧾</div>
           <div class="more-copy">
             <div class="more-title">Import / Export</div>
             <div class="more-sub">CSV and CLZ tools</div>

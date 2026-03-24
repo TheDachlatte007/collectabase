@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Index
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Index, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
@@ -122,3 +122,73 @@ class AppMeta(Base):
     key = Column(String, primary_key=True)
     value = Column(String)
     updated_at = Column(String, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+
+class Lot(Base):
+    __tablename__ = "lots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    purchase_date = Column(String)
+    seller = Column(String)
+    purchase_price_gross = Column(Float, server_default="0", nullable=False)
+    shipping_in = Column(Float, server_default="0", nullable=False)
+    fees_in = Column(Float, server_default="0", nullable=False)
+    other_costs = Column(Float, server_default="0", nullable=False)
+    notes = Column(Text)
+    created_at = Column(String, server_default=func.current_timestamp())
+    updated_at = Column(String, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    items = relationship("LotItem", back_populates="lot", cascade="all, delete-orphan")
+
+
+class LotItem(Base):
+    __tablename__ = "lot_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lot_id = Column(Integer, ForeignKey("lots.id", ondelete="CASCADE"), nullable=False)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="SET NULL"))
+    title_snapshot = Column(String, nullable=False)
+    platform_snapshot = Column(String)
+    item_type_snapshot = Column(String, server_default="game")
+    estimated_value = Column(Float)
+    cost_basis_override = Column(Float)
+    allocated_cost_basis = Column(Float, server_default="0", nullable=False)
+    allocation_method = Column(String, server_default="estimated", nullable=False)
+    status = Column(String, server_default="inventory", nullable=False)
+    notes = Column(Text)
+    created_at = Column(String, server_default=func.current_timestamp())
+    updated_at = Column(String, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    lot = relationship("Lot", back_populates="items")
+    sale = relationship("LotSale", back_populates="item", cascade="all, delete-orphan", uselist=False)
+
+    __table_args__ = (
+        Index("idx_lot_items_lot_id", lot_id),
+        Index("idx_lot_items_game_id", game_id),
+    )
+
+
+class LotSale(Base):
+    __tablename__ = "lot_sales"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lot_item_id = Column(Integer, ForeignKey("lot_items.id", ondelete="CASCADE"), nullable=False)
+    sold_at = Column(String)
+    channel = Column(String)
+    sale_price_gross = Column(Float, server_default="0", nullable=False)
+    platform_fees = Column(Float, server_default="0", nullable=False)
+    shipping_out = Column(Float, server_default="0", nullable=False)
+    other_costs = Column(Float, server_default="0", nullable=False)
+    net_proceeds = Column(Float, server_default="0", nullable=False)
+    realized_profit = Column(Float, server_default="0", nullable=False)
+    notes = Column(Text)
+    created_at = Column(String, server_default=func.current_timestamp())
+    updated_at = Column(String, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    item = relationship("LotItem", back_populates="sale")
+
+    __table_args__ = (
+        UniqueConstraint("lot_item_id", name="uq_lot_sales_lot_item_id"),
+        Index("idx_lot_sales_lot_item_id", lot_item_id),
+    )

@@ -17,6 +17,7 @@ load_dotenv(PROJECT_ROOT / "backend" / ".env")
 from .api.routes.games import router as games_router
 from .api.routes.import_export import UPLOADS_DIR, router as import_export_router
 from .api.routes.lookup import router as lookup_router
+from .api.routes.lots import router as lots_router
 from .api.routes.settings import router as settings_router
 from .api.routes.stats import router as stats_router
 from .clz_import import router as clz_router
@@ -29,6 +30,7 @@ app = FastAPI(title="Collectabase", version=APP_VERSION)
 _startup_time = time.time()
 app.include_router(games_router)
 app.include_router(lookup_router)
+app.include_router(lots_router)
 app.include_router(import_export_router)
 app.include_router(stats_router)
 app.include_router(settings_router)

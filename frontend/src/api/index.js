@@ -70,3 +70,16 @@ export const priceCatalogApi = {
   },
   clear: (platform = null) => apiDelete(`/api/price-catalog${platform ? `?platform=${encodeURIComponent(platform)}` : ''}`)
 }
+
+export const lotsApi = {
+  list: () => apiGet('/api/lots'),
+  get: (id) => apiGet(`/api/lots/${id}`),
+  create: (payload) => apiPost('/api/lots', payload),
+  update: (id, payload) => apiPut(`/api/lots/${id}`, payload),
+  remove: (id) => apiDelete(`/api/lots/${id}`),
+  addItem: (lotId, payload) => apiPost(`/api/lots/${lotId}/items`, payload),
+  updateItem: (lotId, itemId, payload) => apiPut(`/api/lots/${lotId}/items/${itemId}`, payload),
+  deleteItem: (lotId, itemId) => apiDelete(`/api/lots/${lotId}/items/${itemId}`),
+  saveSale: (itemId, payload) => apiPost(`/api/lots/items/${itemId}/sale`, payload),
+  deleteSale: (itemId) => apiDelete(`/api/lots/items/${itemId}/sale`)
+}
