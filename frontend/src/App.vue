@@ -114,7 +114,7 @@ function toggleSidebar() {
 .app-layout {
   display: flex;
   min-height: 100vh;
-  background: var(--bg);
+  background: transparent;
 }
 
 .desktop-sidebar {
@@ -122,7 +122,7 @@ function toggleSidebar() {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-light);
+  background: var(--sidebar-bg);
   border-right: 1px solid var(--glass-border);
   position: sticky;
   top: 0;
@@ -181,11 +181,12 @@ function toggleSidebar() {
   height: 32px;
   border-radius: 6px;
   object-fit: contain;
-  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 25%, transparent);
   flex-shrink: 0;
 }
 
 .logo-text {
+  font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 800;
   color: var(--text);
@@ -227,8 +228,8 @@ function toggleSidebar() {
 
 .sidebar-nav a.active,
 .sidebar-nav a.router-link-active {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05));
-  border-color: rgba(139, 92, 246, 0.3);
+  background: linear-gradient(135deg, var(--primary-soft), transparent);
+  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
   color: var(--primary);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
@@ -250,7 +251,7 @@ function toggleSidebar() {
   justify-content: center;
   font-size: 1.05rem;
   padding: 0.875rem;
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.25);
+  box-shadow: 0 4px 15px color-mix(in srgb, var(--primary) 25%, transparent);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -294,7 +295,7 @@ function toggleSidebar() {
     justify-content: space-between;
     align-items: center;
     padding: max(0.875rem, env(safe-area-inset-top)) 1.25rem 0.875rem;
-    background: var(--bg-light);
+    background: var(--nav-bg);
     border-bottom: 1px solid var(--glass-border);
     position: sticky;
     top: 0;
@@ -308,6 +309,7 @@ function toggleSidebar() {
     align-items: center;
     gap: 0.5rem;
     font-weight: 700;
+    font-family: var(--font-display);
     font-size: 1.1rem;
     color: var(--text);
     text-decoration: none;
@@ -330,7 +332,7 @@ function toggleSidebar() {
     left: 0;
     right: 0;
     height: 64px;
-    background: rgba(9, 9, 11, 0.85);
+    background: var(--nav-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--glass-border);

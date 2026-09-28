@@ -74,6 +74,8 @@ docker-compose up -d --build
 
 Open **http://localhost:8000** — done.
 
+> **Camera barcode scanning:** browsers allow camera access only on `https://` sites or `http://localhost`. For mobile scanning through a LAN address or public Portainer deployment, place Collectabase behind HTTPS first.
+
 ### Portainer Stack
 
 Create a new Stack and paste the contents of `docker-compose.yml`, or point to this repository.

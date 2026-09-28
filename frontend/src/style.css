@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
 
 * {
   margin: 0;
@@ -7,18 +7,22 @@
 }
 
 :root {
-  /* Glassmorphism Dark Theme Core Colors */
-  --primary: #8b5cf6;
-  --primary-dark: #7c3aed;
-  --secondary: #ec4899;
-  --accent-tertiary: #38bdf8;
-  --bg: #09090b;
-  --bg-light: rgba(24, 24, 27, 0.6);
-  --bg-lighter: rgba(39, 39, 42, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --card-blur: blur(16px);
+  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --primary: #aa87ff;
+  --primary-dark: #8d68e5;
+  --primary-soft: rgba(170, 135, 255, 0.14);
+  --secondary: #df8dad;
+  --accent-tertiary: #68bdd9;
+  --bg: #121116;
+  --bg-light: rgba(29, 28, 35, 0.9);
+  --bg-lighter: rgba(47, 45, 55, 0.96);
+  --sidebar-bg: rgba(22, 21, 27, 0.96);
+  --nav-bg: rgba(22, 21, 27, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-hover: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+  --card-blur: blur(12px);
 
   --text: #f8fafc;
   --text-muted: #94a3b8;
@@ -28,48 +32,78 @@
   --error: #ef4444;
 
   --container-padding: 2rem;
-  --btn-padding-y: 0.75rem;
-  --btn-padding-x: 1.5rem;
-  --btn-min-height: 44px;
-  --card-padding: 1.5rem;
-  --field-padding-y: 0.75rem;
-  --field-padding-x: 1rem;
+  --btn-padding-y: 0.65rem;
+  --btn-padding-x: 1.1rem;
+  --btn-min-height: 40px;
+  --card-padding: 1.35rem;
+  --field-padding-y: 0.65rem;
+  --field-padding-x: 0.85rem;
 }
 
-/* Other Themes */
+/* Themes are complete palettes, not just alternate button colors. */
 :root[data-theme='emerald'] {
-  --primary: #10b981;
-  --primary-dark: #059669;
-  --secondary: #14b8a6;
-  --accent-tertiary: #22d3ee;
+  --primary: #62c696;
+  --primary-dark: #3da878;
+  --primary-soft: rgba(98, 198, 150, 0.14);
+  --secondary: #d7b46d;
+  --accent-tertiary: #63bfd0;
+  --bg: #101714;
+  --bg-light: rgba(25, 37, 31, 0.91);
+  --bg-lighter: rgba(42, 58, 49, 0.96);
+  --sidebar-bg: rgba(19, 29, 24, 0.97);
+  --nav-bg: rgba(19, 29, 24, 0.95);
 }
 
 :root[data-theme='sunset'] {
-  --primary: #f97316;
-  --primary-dark: #ea580c;
-  --secondary: #ef4444;
-  --accent-tertiary: #facc15;
+  --primary: #e99a62;
+  --primary-dark: #c77945;
+  --primary-soft: rgba(233, 154, 98, 0.14);
+  --secondary: #d46f66;
+  --accent-tertiary: #d9b464;
+  --bg: #191310;
+  --bg-light: rgba(42, 31, 25, 0.91);
+  --bg-lighter: rgba(66, 46, 35, 0.97);
+  --sidebar-bg: rgba(32, 23, 18, 0.97);
+  --nav-bg: rgba(32, 23, 18, 0.95);
 }
 
 :root[data-theme='ocean'] {
-  --primary: #0ea5e9;
-  --primary-dark: #0284c7;
-  --secondary: #14b8a6;
-  --accent-tertiary: #8b5cf6;
+  --primary: #66bdda;
+  --primary-dark: #429ebd;
+  --primary-soft: rgba(102, 189, 218, 0.14);
+  --secondary: #79c8ac;
+  --accent-tertiary: #8da9da;
+  --bg: #10171a;
+  --bg-light: rgba(24, 37, 41, 0.91);
+  --bg-lighter: rgba(39, 58, 64, 0.97);
+  --sidebar-bg: rgba(18, 29, 33, 0.97);
+  --nav-bg: rgba(18, 29, 33, 0.95);
 }
 
 :root[data-theme='rose'] {
-  --primary: #e11d48;
-  --primary-dark: #be123c;
-  --secondary: #f97316;
-  --accent-tertiary: #fb7185;
+  --primary: #dd8198;
+  --primary-dark: #bb5f78;
+  --primary-soft: rgba(221, 129, 152, 0.14);
+  --secondary: #d59c72;
+  --accent-tertiary: #c791af;
+  --bg: #191114;
+  --bg-light: rgba(42, 27, 32, 0.91);
+  --bg-lighter: rgba(65, 41, 49, 0.97);
+  --sidebar-bg: rgba(32, 20, 24, 0.97);
+  --nav-bg: rgba(32, 20, 24, 0.95);
 }
 
 :root[data-theme='slate'] {
-  --primary: #64748b;
-  --primary-dark: #475569;
-  --secondary: #0f766e;
-  --accent-tertiary: #38bdf8;
+  --primary: #a9b2c0;
+  --primary-dark: #7b8798;
+  --primary-soft: rgba(169, 178, 192, 0.14);
+  --secondary: #84a8a4;
+  --accent-tertiary: #92a7c6;
+  --bg: #15171a;
+  --bg-light: rgba(29, 32, 36, 0.92);
+  --bg-lighter: rgba(46, 51, 58, 0.97);
+  --sidebar-bg: rgba(22, 25, 29, 0.97);
+  --nav-bg: rgba(22, 25, 29, 0.95);
 }
 
 :root[data-density='compact'] {
@@ -83,18 +117,32 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-family: var(--font-body);
   background-color: var(--bg);
-  /* The Secret Sauce for Glassmorphism: Background animated gradients */
   background-image: 
-    radial-gradient(circle at 10% 20%, color-mix(in srgb, var(--primary) 24%, transparent), transparent 30%),
-    radial-gradient(circle at 90% 80%, color-mix(in srgb, var(--secondary) 24%, transparent), transparent 30%),
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent-tertiary) 16%, transparent), transparent 40%);
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 34%),
+    radial-gradient(ellipse at 92% 100%, color-mix(in srgb, var(--secondary) 10%, transparent), transparent 36%),
+    linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.015) 48%, transparent 100%);
   background-attachment: fixed;
   color: var(--text);
   line-height: 1.6;
   overscroll-behavior: contain;
   -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  color: var(--bg);
+  background: var(--primary);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+h1 {
+  line-height: 1.15;
 }
 
 #app {
@@ -146,13 +194,13 @@ nav a.router-link-active {
 /* Buttons w/ Glassy Premium Feel */
 .btn {
   padding: var(--btn-padding-y) var(--btn-padding-x);
-  border-radius: 0.75rem;
+  border-radius: 0.6rem;
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  letter-spacing: 0.02em;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -162,15 +210,15 @@ nav a.router-link-active {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  color: white;
-  box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.39);
+  background: var(--primary);
+  color: #151217;
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px 0 rgba(139, 92, 246, 0.45);
-  filter: brightness(1.1);
+  box-shadow: 0 7px 20px color-mix(in srgb, var(--primary) 30%, transparent);
+  filter: brightness(1.06);
 }
 
 .btn-primary:active {
@@ -179,13 +227,12 @@ nav a.router-link-active {
 
 .btn-secondary {
   background: var(--bg-lighter);
-  backdrop-filter: blur(8px);
   color: var(--text);
   border: 1px solid var(--glass-border);
 }
 
 .btn-secondary:hover {
-  background: rgba(63, 63, 70, 0.8);
+  background: color-mix(in srgb, var(--bg-lighter) 80%, white);
   border-color: var(--glass-border-hover);
   transform: translateY(-2px);
 }
@@ -199,29 +246,26 @@ nav a.router-link-active {
 /* Cards (Glassmorphism Base) */
 .card {
   background: var(--bg-light);
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   padding: var(--card-padding);
   border: 1px solid var(--glass-border);
-  backdrop-filter: var(--card-blur);
-  -webkit-backdrop-filter: var(--card-blur);
   box-shadow: var(--glass-shadow);
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: 0 15px 34px rgba(0, 0, 0, 0.29);
   border-color: var(--glass-border-hover);
 }
 
 /* Form Elements */
 input, select, textarea {
-  background: rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--bg) 76%, var(--bg-light));
   border: 1px solid var(--glass-border);
   color: var(--text);
   padding: var(--field-padding-y) var(--field-padding-x);
-  border-radius: 0.75rem;
-  font-family: 'Inter', sans-serif;
+  border-radius: 0.55rem;
+  font-family: var(--font-body);
   font-size: 1rem;
   width: 100%;
   transition: all 0.3s ease;
@@ -237,9 +281,9 @@ input[type='radio'] {
 
 input:focus, select:focus, textarea:focus {
   outline: none;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg);
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
 .form-group {
@@ -295,7 +339,7 @@ input:focus, select:focus, textarea:focus {
   padding: 4rem 2rem;
   color: var(--text-muted);
   background: var(--bg-light);
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   border: 1px dashed var(--glass-border);
   backdrop-filter: var(--card-blur);
 }
@@ -322,6 +366,6 @@ input:focus, select:focus, textarea:focus {
   }
   .card {
     padding: 1.25rem;
-    border-radius: 0.875rem;
+    border-radius: 0.75rem;
   }
 }

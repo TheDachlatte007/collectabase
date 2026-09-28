@@ -85,14 +85,14 @@
         </div>
         <div class="appearance-grid">
           <div class="form-group mb-0">
-            <label for="theme-select">Theme Variant</label>
+            <label for="theme-select">Collection Theme</label>
             <select id="theme-select" :value="uiPrefs.theme" @change="onThemeChange">
-              <option value="indigo">Indigo</option>
-              <option value="emerald">Emerald</option>
-              <option value="sunset">Sunset</option>
-              <option value="ocean">Ocean</option>
-              <option value="rose">Rose</option>
-              <option value="slate">Slate</option>
+              <option value="indigo">Archive Violet</option>
+              <option value="emerald">Forest Shelf</option>
+              <option value="sunset">Amber Room</option>
+              <option value="ocean">Harbor Blue</option>
+              <option value="rose">Rosewood</option>
+              <option value="slate">Graphite</option>
             </select>
           </div>
           <div class="form-group mb-0">
@@ -109,7 +109,7 @@
             <span>{{ theme.label }}</span>
           </div>
         </div>
-        <p class="text-muted mt-2">Preferences are saved in your browser and applied instantly.</p>
+        <p class="text-muted mt-2">Each theme changes the full collection palette. Preferences are saved in this browser and applied instantly.</p>
       </section>
 
       <section class="card settings-section">
@@ -466,12 +466,12 @@ const setupHints = computed(() => {
   return hints
 })
 const themeSwatches = [
-  { value: 'indigo', label: 'Indigo', color: '#8b5cf6' },
-  { value: 'emerald', label: 'Emerald', color: '#10b981' },
-  { value: 'sunset', label: 'Sunset', color: '#f97316' },
-  { value: 'ocean', label: 'Ocean', color: '#0ea5e9' },
-  { value: 'rose', label: 'Rose', color: '#e11d48' },
-  { value: 'slate', label: 'Slate', color: '#64748b' },
+  { value: 'indigo', label: 'Archive Violet', color: '#aa87ff' },
+  { value: 'emerald', label: 'Forest Shelf', color: '#62c696' },
+  { value: 'sunset', label: 'Amber Room', color: '#e99a62' },
+  { value: 'ocean', label: 'Harbor Blue', color: '#66bdda' },
+  { value: 'rose', label: 'Rosewood', color: '#dd8198' },
+  { value: 'slate', label: 'Graphite', color: '#a9b2c0' },
 ]
 
 function onThemeChange(event) {

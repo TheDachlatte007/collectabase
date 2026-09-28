@@ -99,7 +99,7 @@
               </button>
             </div>
             <p v-if="scannerNoticeVisible && !scannerFeatureEnabled" class="barcode-status scanner-info-note">
-              Scanner is available on HTTPS or localhost.
+              {{ scannerUnavailableReason }}
             </p>
             <p v-if="barcodeLookupInfo" class="barcode-status">{{ barcodeLookupInfo }}</p>
           </div>
@@ -339,7 +339,9 @@ const scannerNoticeVisible = ref(false)
 const scannerVideo = ref(null)
 const barcodeLookupLoading = ref(false)
 const barcodeLookupInfo = ref('')
-const scannerFeatureEnabled = false
+const scannerFeatureEnabled = typeof window !== 'undefined'
+  && Boolean(navigator.mediaDevices?.getUserMedia)
+  && (window.isSecureContext || ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname))
 let cameraStream = null
 let scanFrame = null
 let zxingControls = null
@@ -348,6 +350,11 @@ const providerErrorText = computed(() => {
   const entries = Object.entries(searchErrors.value || {}).filter(([k, value]) => !!value && k !== 'results')
   if (!entries.length) return ''
   return `Some providers are unavailable: ${entries.map(([key, value]) => `${key.toUpperCase()} (${value})`).join(' · ')}`
+})
+
+const scannerUnavailableReason = computed(() => {
+  if (!navigator.mediaDevices?.getUserMedia) return 'Camera scanning is not available in this browser.'
+  return 'Scanner is available on HTTPS or localhost. Open Collectabase through its HTTPS address to scan with your phone.'
 })
 
 const sourceCounts = computed(() => {
