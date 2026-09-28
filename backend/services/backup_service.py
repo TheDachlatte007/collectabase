@@ -163,6 +163,11 @@ def _backup_filename() -> str:
     return f"collectabase-backup-{datetime.now().strftime('%Y-%m-%d-%H%M%S')}.zip"
 
 
+def _automatic_backup_filename() -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%SZ")
+    return f"collectabase-auto-backup-{timestamp}.zip"
+
+
 def create_backup(include_secrets: bool = False, password: str = "") -> tuple[Path, str, dict[str, Any]]:
     """Create a temporary ZIP archive that the route can stream to the browser."""
     with _BACKUP_LOCK:
@@ -205,6 +210,41 @@ def create_backup(include_secrets: bool = False, password: str = "") -> tuple[Pa
 
 def cleanup_backup(path: Path) -> None:
     shutil.rmtree(path.parent, ignore_errors=True)
+
+
+def create_automatic_backup(retention: int = 14) -> dict[str, Any]:
+    """Persist a credential-free daily backup and retain only recent automatic archives."""
+    if retention < 1:
+        raise BackupError("Automatic backup retention must be at least one archive.")
+
+    archive_path, _filename, manifest = create_backup(include_secrets=False)
+    destination_dir = _sqlite_database_path().parent / "backups"
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination = destination_dir / _automatic_backup_filename()
+    try:
+        shutil.move(str(archive_path), destination)
+    finally:
+        cleanup_backup(archive_path)
+
+    archives = sorted(
+        destination_dir.glob("collectabase-auto-backup-*.zip"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for expired in archives[retention:]:
+        try:
+            expired.unlink()
+        except OSError:
+            # A failed cleanup must not invalidate the newly-created backup.
+            continue
+
+    retained = list(destination_dir.glob("collectabase-auto-backup-*.zip"))
+    return {
+        "filename": destination.name,
+        "path": str(destination),
+        "retained": len(retained),
+        "created_at": manifest["created_at"],
+    }
 
 
 def _validate_member_name(name: str) -> None:

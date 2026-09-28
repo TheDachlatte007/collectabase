@@ -97,6 +97,10 @@ Provider credentials can be included only as a separately encrypted payload prot
 
 To restore a collection, upload the ZIP in Settings, inspect its contents, then type `RESTORE` to confirm. Collectabase validates the archive and creates a safety backup under `data/backups/` before replacing the active collection.
 
+### Automatic Local Backups
+
+Automatic backups run daily at 02:15 by default and are stored under `data/backups/`. They include collection data and uploaded images, but never provider credentials. Configure the retention period or disable the schedule in **Settings → Maintenance Jobs**. Manual full backups remain the option for a portable backup with optional encrypted provider credentials.
+
 ---
 
 ## 🔑 Configuration

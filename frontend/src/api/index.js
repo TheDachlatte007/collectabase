@@ -52,6 +52,7 @@ export const settingsApi = {
   info: () => apiGet('/api/settings/info'),
   updateSecrets: (payload) => apiPost('/api/settings/secrets', payload),
   updateScheduler: (payload) => apiPost('/api/settings/scheduler', payload),
+  updateAutoBackup: (payload) => apiPost('/api/settings/auto-backup', payload),
   clearCovers: () => apiPost('/api/settings/clear-covers'),
   clearDatabase: () => apiDelete('/api/database/clear'),
   bulkEnrich: (limit) => apiPost(`/api/enrich/all?limit=${limit}`)

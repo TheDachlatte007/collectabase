@@ -413,6 +413,25 @@ class ApiSmokeTest(unittest.TestCase):
             ).fetchone()
         self.assertEqual(restored_secret[0], "backup-secret-value")
 
+    def test_automatic_backup_keeps_only_configured_archives(self):
+        from backend.services.backup_service import create_automatic_backup
+
+        backup_dir = Path(self._db_path()).parent / "backups"
+        backup_dir.mkdir(exist_ok=True)
+        expired = backup_dir / "collectabase-auto-backup-20000101T000000Z.zip"
+        expired.write_bytes(b"expired-test-backup")
+
+        result = create_automatic_backup(retention=1)
+        archive_path = Path(result["path"])
+        self.assertTrue(archive_path.exists())
+        self.assertEqual(result["retained"], 1)
+        self.assertFalse(expired.exists())
+
+        with zipfile.ZipFile(archive_path) as archive:
+            self.assertIn("manifest.json", archive.namelist())
+            self.assertIn("collection.sqlite", archive.namelist())
+            self.assertNotIn("encrypted-secrets.json", archive.namelist())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -214,8 +214,14 @@
         <div class="info-grid mb-2">
           <div class="info-item">
             <label>Price Update Scheduler</label>
-            <span :class="schedulerEnabled ? 'status-ok' : 'status-warn'">
-              {{ schedulerEnabled ? `Active (${info.scheduler_cron})` : 'Disabled' }}
+            <span :class="priceSchedulerEnabled ? 'status-ok' : 'status-warn'">
+              {{ priceSchedulerEnabled ? `Active (${info.scheduler_cron})` : 'Disabled' }}
+            </span>
+          </div>
+          <div class="info-item">
+            <label>Automatic Backup</label>
+            <span :class="autoBackupEnabled ? 'status-ok' : 'status-warn'">
+              {{ autoBackupEnabled ? `Active (${info.auto_backup_count ?? 0} saved)` : 'Disabled' }}
             </span>
           </div>
           <div class="info-item">
@@ -249,6 +255,29 @@
                 {{ schedulerSaving ? 'Saving…' : 'Save Schedule' }}
               </button>
             </div>
+          </div>
+
+          <div class="subpanel">
+            <h3>Automatic Backup</h3>
+            <p class="text-muted mb-2">Create a local recovery ZIP every day at 02:15. Database and uploads are included; provider credentials are excluded.</p>
+            <label class="clear-check">
+              <input v-model="autoBackupEnabled" type="checkbox" />
+              Enable daily local backup
+            </label>
+            <div class="flex gap-2 items-center mt-2 wrap-mobile">
+              <label class="text-muted">Keep:</label>
+              <select class="limit-input" v-model.number="autoBackupRetention" style="width: auto;">
+                <option :value="7">7 backups</option>
+                <option :value="14">14 backups</option>
+                <option :value="30">30 backups</option>
+                <option :value="60">60 backups</option>
+              </select>
+              <button @click="saveAutoBackup" class="btn btn-secondary" :disabled="autoBackupSaving">
+                {{ autoBackupSaving ? 'Saving…' : 'Save Backup Schedule' }}
+              </button>
+            </div>
+            <p v-if="info.last_auto_backup_at" class="text-muted mt-2">Last backup: {{ formatTimestamp(info.last_auto_backup_at) }}{{ info.last_auto_backup_name ? ` · ${info.last_auto_backup_name}` : '' }}</p>
+            <p v-if="info.last_auto_backup_error" class="text-error mt-2">Last backup error: {{ info.last_auto_backup_error }}</p>
           </div>
 
           <div class="subpanel">
@@ -435,6 +464,9 @@ const priceLimit = ref(100)
 const priceProgress = ref({ success: 0, failed: 0, total: 0, done: 0 })
 const schedulerInterval = ref(0)
 const schedulerSaving = ref(false)
+const autoBackupEnabled = ref(true)
+const autoBackupRetention = ref(14)
+const autoBackupSaving = ref(false)
 const uiPrefs = ref(loadUiPrefs())
 const localAdminKey = ref(getAdminApiKey())
 const secretsSaving = ref(false)
@@ -456,7 +488,7 @@ const secretsForm = ref({
 const coverCoverage = computed(() => Number(info.value.cover_coverage_pct || 0))
 const providersConfigured = computed(() => Number(info.value.providers_configured || 0))
 const providersTotal = computed(() => Number(info.value.providers_total || 4))
-const schedulerEnabled = computed(() => Boolean(info.value.scheduler_enabled))
+const priceSchedulerEnabled = computed(() => Boolean(info.value.price_scheduler_enabled))
 const setupHints = computed(() => {
   const hints = []
   if (!info.value.igdb_configured) hints.push('Set IGDB credentials to improve metadata and cover lookup.')
@@ -574,6 +606,28 @@ async function saveScheduler() {
   }
 }
 
+async function saveAutoBackup() {
+  autoBackupSaving.value = true
+  try {
+    const res = await settingsApi.updateAutoBackup({
+      enabled: autoBackupEnabled.value,
+      retention: autoBackupRetention.value,
+    })
+    if (res.ok) {
+      notifySuccess(autoBackupEnabled.value ? 'Daily backup schedule saved.' : 'Automatic backups disabled.')
+      await loadInfo()
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Failed to update automatic backups.')
+    }
+  } catch (e) {
+    console.error('Update automatic backups failed:', e)
+    notifyError('Failed to update automatic backups.')
+  } finally {
+    autoBackupSaving.value = false
+  }
+}
+
 function formatTimestamp(value) {
   if (!value) return 'Never'
   try {
@@ -621,6 +675,8 @@ async function loadInfo() {
     if (res.ok) {
       info.value = res.data
       schedulerInterval.value = res.data.scheduler_interval || 0
+      autoBackupEnabled.value = res.data.auto_backup_enabled !== false
+      autoBackupRetention.value = res.data.auto_backup_retention || 14
     } else {
       const detail = res.data?.detail
       notifyError(detail?.message || detail || 'Failed to load settings.')

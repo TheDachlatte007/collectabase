@@ -46,6 +46,11 @@ class SchedulerUpdate(BaseModel):
     interval: int
 
 
+class AutoBackupUpdate(BaseModel):
+    enabled: bool = True
+    retention: int = Field(default=14, ge=1, le=90)
+
+
 
 _SECRET_FIELDS = {
     "igdb_client_id": "cfg:igdb_client_id",
@@ -68,6 +73,13 @@ def _human_size(size_bytes: int) -> str:
 def _uploads_dir() -> str:
     default_uploads = "/app/uploads" if Path("/app").exists() else str(Path(__file__).resolve().parents[3] / "uploads")
     return os.getenv("UPLOADS_DIR", default_uploads)
+
+
+def _safe_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _workflow_scheduler_status():
@@ -166,6 +178,9 @@ async def settings_info():
             game_items = total_items
             non_game_items = 0
 
+    backup_dir = Path(db_path).parent / "backups"
+    auto_backup_files = list(backup_dir.glob("collectabase-auto-backup-*.zip")) if backup_dir.is_dir() else []
+
     meta = get_app_meta_many(
         [
             "last_bulk_enrich_at",
@@ -181,12 +196,20 @@ async def settings_info():
             "last_catalog_scrape_platforms",
             "last_catalog_scrape_total",
             "apscheduler_interval",
+            "auto_backup_enabled",
+            "auto_backup_retention",
+            "last_auto_backup_at",
+            "last_auto_backup_name",
+            "last_auto_backup_error",
         ]
     )
     
-    interval = int(meta.get("apscheduler_interval", 0))
+    interval = _safe_int(meta.get("apscheduler_interval", 0), 0)
+    auto_backup_enabled = str(meta.get("auto_backup_enabled", "1")).strip().lower() not in {"0", "false", "off", "no"}
+    auto_backup_retention = max(1, min(_safe_int(meta.get("auto_backup_retention", 14), 14), 90))
     scheduler = {
-        "scheduler_enabled": interval > 0,
+        "scheduler_enabled": interval > 0 or auto_backup_enabled,
+        "price_scheduler_enabled": interval > 0,
         "scheduler_type": "internal",
         "scheduler_cron": f"Every {interval} hours" if interval > 0 else "Off",
         "scheduler_interval": interval,
@@ -242,6 +265,12 @@ async def settings_info():
         "last_catalog_scrape_at": _meta_value("last_catalog_scrape_at"),
         "last_catalog_scrape_platforms": _meta_value("last_catalog_scrape_platforms", ""),
         "last_catalog_scrape_total": int(_meta_value("last_catalog_scrape_total", 0) or 0),
+        "auto_backup_enabled": auto_backup_enabled,
+        "auto_backup_retention": auto_backup_retention,
+        "auto_backup_count": len(auto_backup_files),
+        "last_auto_backup_at": _meta_value("last_auto_backup_at"),
+        "last_auto_backup_name": _meta_value("last_auto_backup_name", ""),
+        "last_auto_backup_error": _meta_value("last_auto_backup_error", ""),
         **admin_status,
         **scheduler,
     }
@@ -280,6 +309,15 @@ async def update_scheduler_settings(payload: SchedulerUpdate, _admin: None = Dep
     from ...scheduler import update_scheduler
     update_scheduler()
     return {"ok": True, "interval": payload.interval}
+
+
+@router.post("/api/settings/auto-backup")
+async def update_auto_backup_settings(payload: AutoBackupUpdate, _admin: None = Depends(require_admin_access)):
+    set_app_meta("auto_backup_enabled", "1" if payload.enabled else "0")
+    set_app_meta("auto_backup_retention", str(payload.retention))
+    from ...scheduler import update_scheduler
+    update_scheduler()
+    return {"ok": True, "enabled": payload.enabled, "retention": payload.retention}
 
 @router.post("/api/settings/clear-covers")
 async def clear_all_covers(_admin: None = Depends(require_admin_access)):
