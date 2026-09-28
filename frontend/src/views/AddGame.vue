@@ -146,7 +146,10 @@
 
           <div class="form-group">
             <label>Location</label>
-            <input v-model="game.location" placeholder="e.g. Shelf A, Box 3" />
+            <input v-model="game.location" list="location-options" placeholder="e.g. Shelf A, Box 3" />
+            <datalist id="location-options">
+              <option v-for="location in locations" :key="location.name" :value="location.name" :label="`${location.item_count} items`" />
+            </datalist>
           </div>
 
           <div class="form-group">
@@ -311,13 +314,14 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { gamesApi, lookupApi, platformsApi } from '../api'
+import { gamesApi, locationsApi, lookupApi, platformsApi } from '../api'
 import { useGameStore } from '../stores/useGameStore'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
 
 const router = useRouter()
 const route = useRoute()
 const platforms = ref([])
+const locations = ref([])
 const saving = ref(false)
 const igdbSearch = ref('')
 const igdbResults = ref([])
@@ -441,6 +445,15 @@ async function loadPlatforms() {
   const res = await platformsApi.list()
   platforms.value = res.data || []
   if (!res.ok) notifyError('Failed to load platforms.')
+}
+
+async function loadLocations() {
+  try {
+    const res = await locationsApi.list()
+    if (res.ok) locations.value = Array.isArray(res.data) ? res.data : []
+  } catch (e) {
+    console.warn('Failed to load location suggestions:', e)
+  }
 }
 
 async function loadGame(id) {
@@ -993,7 +1006,7 @@ async function startCamera() {
 
 
 onMounted(async () => {
-  await loadPlatforms()
+  await Promise.all([loadPlatforms(), loadLocations()])
   if (route.params.id) {
     isEditMode.value = true
     editId.value = route.params.id

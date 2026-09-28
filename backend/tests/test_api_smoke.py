@@ -146,6 +146,7 @@ class ApiSmokeTest(unittest.TestCase):
             "title": "Filter Test Game",
             "platform_id": platform_id,
             "item_type": "game",
+            "location": "Archive Shelf A",
             "is_wishlist": False,
         }
         wish_payload = {
@@ -174,6 +175,14 @@ class ApiSmokeTest(unittest.TestCase):
         filtered_search = self.client.get("/api/games?search=Filter Test Game")
         self.assertEqual(filtered_search.status_code, 200)
         self.assertTrue(any(item["id"] == gid for item in filtered_search.json()))
+
+        filtered_location = self.client.get("/api/games?search=Archive Shelf A")
+        self.assertEqual(filtered_location.status_code, 200)
+        self.assertTrue(any(item["id"] == gid for item in filtered_location.json()))
+
+        locations = self.client.get("/api/locations")
+        self.assertEqual(locations.status_code, 200)
+        self.assertTrue(any(item["name"] == "Archive Shelf A" for item in locations.json()))
 
         self.client.delete(f"/api/games/{gid}")
         self.client.delete(f"/api/games/{wid}")

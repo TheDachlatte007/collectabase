@@ -95,7 +95,8 @@ const brokenCoverIds = ref({})
 
 const filteredGames = computed(() => {
   const filtered = games.value.filter(g => {
-    const matchesSearch = g.title.toLowerCase().includes(search.value.toLowerCase())
+    const haystack = `${g.title || ''} ${g.platform_name || ''} ${g.location || ''}`.toLowerCase()
+    const matchesSearch = haystack.includes(search.value.toLowerCase())
     const matchesPlatform = !selectedPlatform.value || String(g.platform_id) === String(selectedPlatform.value)
     const matchesType = !selectedType.value || g.item_type === selectedType.value
     return matchesSearch && matchesPlatform && matchesType

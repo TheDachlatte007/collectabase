@@ -34,9 +34,9 @@ async def list_games(
             query += " AND g.is_wishlist = ?"
             params.append(1 if wishlist else 0)
         if search:
-            query += " AND (g.title LIKE ? OR g.publisher LIKE ? OR g.developer LIKE ? OR COALESCE(p.name, '') LIKE ? OR COALESCE(g.item_type, '') LIKE ? OR COALESCE(g.barcode, '') LIKE ?)"
+            query += " AND (g.title LIKE ? OR g.publisher LIKE ? OR g.developer LIKE ? OR COALESCE(p.name, '') LIKE ? OR COALESCE(g.item_type, '') LIKE ? OR COALESCE(g.barcode, '') LIKE ? OR COALESCE(g.location, '') LIKE ?)"
             search_param = f"%{search}%"
-            params.extend([search_param, search_param, search_param, search_param, search_param, search_param])
+            params.extend([search_param, search_param, search_param, search_param, search_param, search_param, search_param])
 
         query += " ORDER BY g.updated_at DESC"
         if search:
@@ -319,6 +319,22 @@ async def list_platforms():
     with get_db() as db:
         cursor = db.execute("SELECT * FROM platforms ORDER BY name")
         return [dict_from_row(row) for row in cursor.fetchall()]
+
+
+@router.get("/api/locations")
+async def list_locations():
+    """Return existing collection locations for form suggestions without imposing a fixed taxonomy."""
+    with get_db() as db:
+        rows = db.execute(
+            """
+            SELECT TRIM(location) AS name, COUNT(*) AS item_count
+            FROM games
+            WHERE TRIM(COALESCE(location, '')) != ''
+            GROUP BY TRIM(location)
+            ORDER BY item_count DESC, name COLLATE NOCASE ASC
+            """
+        ).fetchall()
+        return [dict_from_row(row) for row in rows]
 
 
 @router.post("/api/platforms")

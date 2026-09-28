@@ -19,6 +19,10 @@ export const platformsApi = {
   list: () => apiGet('/api/platforms')
 }
 
+export const locationsApi = {
+  list: () => apiGet('/api/locations')
+}
+
 export const lookupApi = {
   combined: (title) => apiPost('/api/lookup/combined', { title }),
   comicvine: (title) => apiPost('/api/lookup/comicvine', { title }),
