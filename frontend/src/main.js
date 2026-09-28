@@ -16,6 +16,7 @@ import Settings from './views/Settings.vue'
 import PriceBrowser from './views/PriceBrowser.vue'
 import MoreMenu from './views/MoreMenu.vue'
 import LotsView from './views/LotsView.vue'
+import CollectionCare from './views/CollectionCare.vue'
 
 const routes = [
   { path: '/', component: GamesList },
@@ -28,6 +29,7 @@ const routes = [
   { path: '/prices', component: PriceBrowser },
   { path: '/settings', component: Settings },
   { path: '/lots', component: LotsView },
+  { path: '/care', component: CollectionCare },
   { path: '/more', component: MoreMenu },
 ]
 

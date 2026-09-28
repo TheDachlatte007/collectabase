@@ -1,7 +1,15 @@
 <template>
   <div class="container">
     <div class="list-header mb-3">
-      <h1>My Collection</h1>
+      <div class="collection-heading">
+        <p class="collection-kicker">Personal library</p>
+        <h1>My Collection</h1>
+        <p class="collection-summary">{{ collectionSummary }}</p>
+      </div>
+      <router-link to="/care" class="care-link" title="Review collection details">
+        <span>Collection Care</span>
+        <strong>{{ careCount }}</strong>
+      </router-link>
       <div class="filters">
         <input
           v-model="search"
@@ -108,6 +116,19 @@ const platformCounts = computed(() => {
   return counts
 })
 
+const collectionSummary = computed(() => {
+  const count = games.value.length
+  const platformsCount = new Set(games.value.map((game) => game.platform_id).filter((id) => id != null)).size
+  const trackedValue = games.value.reduce((total, game) => total + (safeNumber(game.current_value) ?? 0) * (safeNumber(game.quantity) ?? 1), 0)
+  const itemsText = `${count} ${count === 1 ? 'item' : 'items'}`
+  const platformsText = `${platformsCount} ${platformsCount === 1 ? 'platform' : 'platforms'}`
+  return trackedValue > 0
+    ? `${itemsText} across ${platformsText} · €${trackedValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} tracked value`
+    : `${itemsText} across ${platformsText}`
+})
+
+const careCount = computed(() => games.value.filter((game) => !game.cover_url || safeNumber(game.current_value) == null).length)
+
 function typeLabel(type) {
   const labels = {
     game: '🎮 Game',
@@ -194,6 +215,57 @@ onMounted(() => store.load())
   flex-wrap: wrap;
 }
 
+.collection-heading h1 {
+  margin: 0;
+}
+
+.collection-kicker {
+  margin: 0 0 0.2rem;
+  color: var(--primary);
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.collection-summary {
+  margin: 0.3rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.care-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem 0.45rem 0.75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--bg-light);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.18s ease, color 0.18s ease;
+}
+
+.care-link:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  color: var(--text);
+}
+
+.care-link strong {
+  display: grid;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 0.7rem;
+}
+
 .filters {
   display: flex;
   gap: 0.75rem;
@@ -211,6 +283,10 @@ onMounted(() => store.load())
   .list-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .care-link {
+    align-self: flex-start;
   }
 
   .filters {

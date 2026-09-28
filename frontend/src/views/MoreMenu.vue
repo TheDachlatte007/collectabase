@@ -29,6 +29,14 @@
             <div class="more-sub">Bundle cost basis and sales</div>
           </div>
         </router-link>
+
+        <router-link to="/care" class="more-card">
+          <div class="more-icon">✦</div>
+          <div class="more-copy">
+            <div class="more-title">Collection Care</div>
+            <div class="more-sub">Review covers, values and details</div>
+          </div>
+        </router-link>
       </div>
     </div>
 
