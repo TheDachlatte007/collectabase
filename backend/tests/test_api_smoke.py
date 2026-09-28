@@ -1,7 +1,10 @@
+import io
 import os
 import sqlite3
 import tempfile
 import unittest
+import zipfile
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -35,7 +38,7 @@ class ApiSmokeTest(unittest.TestCase):
         return url
 
     def _insert_price_catalog(self, *, title: str, platform: str, loose_eur: float):
-        with sqlite3.connect(self._db_path()) as con:
+        with closing(sqlite3.connect(self._db_path())) as con:
             con.execute(
                 """
                 INSERT INTO price_catalog
@@ -311,6 +314,104 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertEqual(data.get("matched_platform"), xbox["name"].lower())
 
         self.client.delete(f"/api/games/{game_id}")
+
+    def test_full_backup_round_trip_with_uploads_and_credentials(self):
+        platform = self._platform_by_name("xbox one")
+        payload = {
+            "title": "Backup Round Trip Item",
+            "platform_id": platform["id"],
+            "item_type": "accessory",
+            "cover_url": "/uploads/backup-roundtrip.png",
+            "is_wishlist": False,
+        }
+        created = self.client.post("/api/games", json=payload)
+        self.assertEqual(created.status_code, 200)
+        game_id = created.json()["id"]
+
+        upload_path = Path(os.environ["UPLOADS_DIR"]) / "backup-roundtrip.png"
+        upload_path.write_bytes(b"backup-image-content")
+        with closing(sqlite3.connect(self._db_path())) as con:
+            con.execute(
+                "INSERT INTO app_meta (key, value) VALUES (?, ?)",
+                ("cfg:rawg_api_key", "backup-secret-value"),
+            )
+            con.commit()
+
+        lot = self.client.post(
+            "/api/lots",
+            json={"name": "Backup round trip lot", "purchase_price_gross": 50},
+        )
+        self.assertEqual(lot.status_code, 200)
+        lot_id = lot.json()["id"]
+        item = self.client.post(
+            f"/api/lots/{lot_id}/items",
+            json={"game_id": game_id, "quantity": 2, "estimated_value": 30},
+        )
+        self.assertEqual(item.status_code, 200)
+
+        backup = self.client.post(
+            "/api/backups/create",
+            json={"include_provider_credentials": True, "backup_password": "correct horse battery staple"},
+        )
+        self.assertEqual(backup.status_code, 200)
+        archive_bytes = backup.content
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            names = set(archive.namelist())
+            self.assertIn("manifest.json", names)
+            self.assertIn("collection.sqlite", names)
+            self.assertIn("uploads/backup-roundtrip.png", names)
+            self.assertIn("encrypted-secrets.json", names)
+            snapshot_dir = Path(tempfile.mkdtemp(prefix="collectabase_snapshot_"))
+            snapshot_path = snapshot_dir / "collection.sqlite"
+            snapshot_path.write_bytes(archive.read("collection.sqlite"))
+        with closing(sqlite3.connect(snapshot_path)) as con:
+            cleartext_secret = con.execute(
+                "SELECT value FROM app_meta WHERE key = ?", ("cfg:rawg_api_key",)
+            ).fetchone()
+        self.assertIsNone(cleartext_secret)
+
+        inspected = self.client.post(
+            "/api/backups/inspect",
+            files={"file": ("collectabase-backup.zip", archive_bytes, "application/zip")},
+        )
+        self.assertEqual(inspected.status_code, 200)
+        preview = inspected.json()
+        self.assertEqual(preview["counts"]["games"], 1)
+        self.assertEqual(preview["counts"]["lots"], 1)
+        self.assertTrue(preview["includes_provider_credentials"])
+
+        self.client.delete(f"/api/games/{game_id}")
+        upload_path.unlink()
+        wrong_password = self.client.post(
+            "/api/backups/restore",
+            json={
+                "restore_token": preview["token"],
+                "confirmation": "RESTORE",
+                "backup_password": "wrong password value",
+            },
+        )
+        self.assertEqual(wrong_password.status_code, 400)
+        self.assertEqual(self.client.get(f"/api/games/{game_id}").status_code, 404)
+        restored = self.client.post(
+            "/api/backups/restore",
+            json={
+                "restore_token": preview["token"],
+                "confirmation": "RESTORE",
+                "backup_password": "correct horse battery staple",
+            },
+        )
+        self.assertEqual(restored.status_code, 200)
+        self.assertTrue(restored.json()["safety_backup"])
+
+        game = self.client.get(f"/api/games/{game_id}")
+        self.assertEqual(game.status_code, 200)
+        self.assertEqual(game.json()["title"], payload["title"])
+        self.assertEqual(upload_path.read_bytes(), b"backup-image-content")
+        with closing(sqlite3.connect(self._db_path())) as con:
+            restored_secret = con.execute(
+                "SELECT value FROM app_meta WHERE key = ?", ("cfg:rawg_api_key",)
+            ).fetchone()
+        self.assertEqual(restored_secret[0], "backup-secret-value")
 
 
 if __name__ == "__main__":

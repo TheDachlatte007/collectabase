@@ -1,4 +1,4 @@
-import { apiDelete, apiDownload, apiGet, apiPost, apiPostForm, apiPut } from './http'
+import { apiDelete, apiDownload, apiGet, apiPost, apiPostDownload, apiPostForm, apiPut } from './http'
 
 export const gamesApi = {
   list: (params = '') => apiGet(`/api/games${params}`),
@@ -82,4 +82,10 @@ export const lotsApi = {
   deleteItem: (lotId, itemId) => apiDelete(`/api/lots/${lotId}/items/${itemId}`),
   saveSale: (itemId, payload) => apiPost(`/api/lots/items/${itemId}/sale`, payload),
   deleteSale: (itemId) => apiDelete(`/api/lots/items/${itemId}/sale`)
+}
+
+export const backupsApi = {
+  create: (payload) => apiPostDownload('/api/backups/create', payload, 'collectabase-backup.zip'),
+  inspect: (formData) => apiPostForm('/api/backups/inspect', formData),
+  restore: (payload) => apiPost('/api/backups/restore', payload)
 }

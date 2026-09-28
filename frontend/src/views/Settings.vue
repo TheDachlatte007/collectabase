@@ -292,7 +292,7 @@
         </div>
 
         <div class="backup-note mb-2">
-          <strong>Backup reminder:</strong> CSV export backs up your collection data, but a full server backup still needs the database and uploaded images.
+          <strong>CSV export is not a full backup:</strong> use Full Backup to include your collection, lots, price history and uploaded images in one ZIP file.
         </div>
 
         <div class="settings-columns">
@@ -316,6 +316,55 @@
             <h3>Collection Export</h3>
             <p class="text-muted mb-2">Download the current collection as CSV.</p>
             <button @click="exportCSV" class="btn btn-secondary">Download CSV Export</button>
+          </div>
+        </div>
+
+        <div class="settings-columns">
+          <div class="subpanel">
+            <h3>Full Backup</h3>
+            <p class="text-muted mb-2">Create one portable ZIP with collection data, lots, price history and every uploaded image.</p>
+            <label class="clear-check">
+              <input v-model="includeProviderCredentials" type="checkbox" />
+              Include provider credentials in an encrypted file
+            </label>
+            <input
+              v-if="includeProviderCredentials"
+              v-model="backupPassword"
+              type="password"
+              minlength="12"
+              autocomplete="new-password"
+              placeholder="Backup password (12+ characters)"
+              class="mt-2"
+            />
+            <p v-if="includeProviderCredentials" class="text-muted mt-2">The password is required to restore IGDB, eBay, RAWG and PriceCharting settings. Your admin key is never included.</p>
+            <button class="btn btn-primary mt-2" @click="createFullBackup" :disabled="backupCreating">
+              {{ backupCreating ? 'Creating backup…' : 'Download Full Backup' }}
+            </button>
+          </div>
+
+          <div class="subpanel">
+            <h3>Restore Full Backup</h3>
+            <p class="text-muted mb-2">Inspect a Collectabase ZIP before restoring it. Restoring replaces this collection and creates a server-side safety backup first.</p>
+            <input type="file" accept=".zip,application/zip" @change="onBackupFile" />
+            <button class="btn btn-secondary mt-2" @click="inspectFullBackup" :disabled="!backupFile || backupInspecting">
+              {{ backupInspecting ? 'Inspecting…' : 'Inspect Backup' }}
+            </button>
+            <div v-if="restorePreview" class="restore-preview mt-2">
+              <strong>Backup preview</strong>
+              <p>{{ restorePreview.counts?.games ?? 0 }} items · {{ restorePreview.counts?.lots ?? 0 }} lots · {{ restorePreview.uploads?.files ?? 0 }} images</p>
+              <p class="text-muted">Created {{ formatBackupDate(restorePreview.created_at) }} · app {{ restorePreview.app_version || 'unknown' }}</p>
+              <input
+                v-if="restorePreview.includes_provider_credentials"
+                v-model="restorePassword"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Backup password"
+              />
+              <input v-model="restoreConfirmation" type="text" placeholder="Type RESTORE to confirm" class="mt-2" />
+              <button class="btn btn-danger mt-2" @click="restoreFullBackup" :disabled="restoring || restoreConfirmation.trim().toUpperCase() !== 'RESTORE'">
+                {{ restoring ? 'Restoring…' : 'Restore This Backup' }}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -353,7 +402,7 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import { importApi, priceApi, settingsApi } from '../api'
+import { backupsApi, importApi, priceApi, settingsApi } from '../api'
 import { getAdminApiKey, setAdminApiKey } from '../api/http'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
 import { loadUiPrefs, setUiPrefs } from '../utils/uiPreferences'
@@ -371,6 +420,15 @@ const clzLoading = ref(false)
 const clzResult = ref(null)
 const clearLoading = ref(false)
 const clearResult = ref(null)
+const backupCreating = ref(false)
+const includeProviderCredentials = ref(false)
+const backupPassword = ref('')
+const backupFile = ref(null)
+const backupInspecting = ref(false)
+const restorePreview = ref(null)
+const restorePassword = ref('')
+const restoreConfirmation = ref('')
+const restoring = ref(false)
 const priceUpdating = ref(false)
 const priceUpdateDone = ref(false)
 const priceLimit = ref(100)
@@ -634,6 +692,91 @@ async function exportCSV() {
   }
 }
 
+function onBackupFile(event) {
+  backupFile.value = event.target.files?.[0] || null
+  restorePreview.value = null
+  restorePassword.value = ''
+  restoreConfirmation.value = ''
+}
+
+function formatBackupDate(value) {
+  if (!value) return 'unknown date'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+async function createFullBackup() {
+  if (includeProviderCredentials.value && backupPassword.value.length < 12) {
+    notifyError('Use a backup password with at least 12 characters when including provider credentials.')
+    return
+  }
+  backupCreating.value = true
+  try {
+    const res = await backupsApi.create({
+      include_provider_credentials: includeProviderCredentials.value,
+      backup_password: includeProviderCredentials.value ? backupPassword.value : null
+    })
+    if (res.ok) notifySuccess(`Full backup downloaded (${res.data?.filename || 'collectabase-backup.zip'}).`)
+    else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Full backup failed.')
+    }
+  } catch (error) {
+    console.error('Full backup failed:', error)
+    notifyError('Full backup failed.')
+  } finally {
+    backupCreating.value = false
+  }
+}
+
+async function inspectFullBackup() {
+  if (!backupFile.value) return
+  backupInspecting.value = true
+  restorePreview.value = null
+  try {
+    const formData = new FormData()
+    formData.append('file', backupFile.value)
+    const res = await backupsApi.inspect(formData)
+    if (res.ok) {
+      restorePreview.value = res.data
+      notifySuccess('Backup inspected. Review the preview before restoring.')
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Backup inspection failed.')
+    }
+  } catch (error) {
+    console.error('Backup inspection failed:', error)
+    notifyError('Backup inspection failed.')
+  } finally {
+    backupInspecting.value = false
+  }
+}
+
+async function restoreFullBackup() {
+  if (!restorePreview.value?.token || restoreConfirmation.value.trim().toUpperCase() !== 'RESTORE') return
+  if (!confirm('Restore this backup and replace the current collection? A safety backup will be created first.')) return
+  restoring.value = true
+  try {
+    const res = await backupsApi.restore({
+      restore_token: restorePreview.value.token,
+      confirmation: restoreConfirmation.value,
+      backup_password: restorePassword.value || null
+    })
+    if (res.ok) {
+      notifySuccess('Collection restored. Reloading the app…')
+      window.setTimeout(() => window.location.reload(), 1200)
+    } else {
+      const detail = res.data?.detail
+      notifyError(detail?.message || detail || 'Restore failed. The current collection was not changed.')
+    }
+  } catch (error) {
+    console.error('Restore failed:', error)
+    notifyError('Restore failed. The current collection was not changed.')
+  } finally {
+    restoring.value = false
+  }
+}
+
 async function clearCovers() {
   if (!confirm('Are you sure? This will remove all cover URLs from your collection.')) return
   clearing.value = true
@@ -871,6 +1014,18 @@ onMounted(loadInfo)
   border-radius: 0.75rem;
   padding: 0.85rem 1rem;
   color: #fcd34d;
+}
+
+.restore-preview {
+  padding: 0.8rem;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 0.65rem;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.restore-preview p {
+  margin: 0.35rem 0;
+  font-size: 0.82rem;
 }
 
 .status-ok { color: var(--success); font-weight: 700; }

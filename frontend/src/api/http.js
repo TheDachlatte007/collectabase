@@ -95,6 +95,32 @@ export async function apiDownload(url, fallbackFilename = 'download.bin') {
   return { ok: true, status: res.status, data: { filename } }
 }
 
+export async function apiPostDownload(url, body, fallbackFilename = 'download.bin') {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...withAdminHeaders() },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) {
+    const data = await parseJsonSafe(res)
+    return { ok: false, status: res.status, data }
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition')
+  const filename = getFilenameFromDisposition(disposition) || fallbackFilename
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = filename
+    a.click()
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+  return { ok: true, status: res.status, data: { filename } }
+}
+
 export function getAdminApiKey() {
   return readAdminApiKey()
 }

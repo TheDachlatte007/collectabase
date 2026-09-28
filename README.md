@@ -87,6 +87,14 @@ Create a new Stack and paste the contents of `docker-compose.yml`, or point to t
 
 Your data survives container restarts and rebuilds.
 
+### Full Backup & Restore
+
+The Settings page can create a single portable Collectabase ZIP backup. It includes collection data, lots, sales, price history and uploaded images. The scraped PriceCharting catalog is intentionally excluded because it is a rebuildable cache.
+
+Provider credentials can be included only as a separately encrypted payload protected by a backup password. `ADMIN_API_KEY` is never included because it belongs to your Docker or Portainer environment.
+
+To restore a collection, upload the ZIP in Settings, inspect its contents, then type `RESTORE` to confirm. Collectabase validates the archive and creates a safety backup under `data/backups/` before replacing the active collection.
+
 ---
 
 ## 🔑 Configuration

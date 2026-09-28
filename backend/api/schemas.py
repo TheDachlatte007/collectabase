@@ -142,3 +142,14 @@ class LotSaleUpsert(BaseModel):
     shipping_out: Optional[float] = 0
     other_costs: Optional[float] = 0
     notes: Optional[str] = None
+
+
+class BackupCreateRequest(BaseModel):
+    include_provider_credentials: bool = False
+    backup_password: Optional[str] = None
+
+
+class BackupRestoreRequest(BaseModel):
+    restore_token: str
+    confirmation: str
+    backup_password: Optional[str] = None
