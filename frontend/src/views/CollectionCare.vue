@@ -4,7 +4,7 @@
       <div>
         <p class="care-kicker">Collection Care</p>
         <h1>Keep the collection complete</h1>
-        <p class="text-muted">Review entries that still need a cover, current value, or a few useful collection details.</p>
+        <p class="text-muted">Review entries that still need a cover, current value, a fresh price, or a few useful collection details.</p>
       </div>
       <router-link to="/add" class="btn btn-primary">+ Add Item</router-link>
     </header>
@@ -92,6 +92,7 @@ function issuesFor(game) {
   const issues = []
   if (!game.cover_url) issues.push({ key: 'cover', label: 'Missing cover' })
   if (isMissingValue(game.current_value)) issues.push({ key: 'value', label: 'No current value' })
+  if (!isMissingValue(game.current_value) && isStalePrice(game)) issues.push({ key: 'stale', label: 'Price review' })
   if (!game.condition) issues.push({ key: 'condition', label: 'No condition' })
   if (!game.location) issues.push({ key: 'location', label: 'No location' })
   if (game.item_type === 'game' && !game.platform_id) issues.push({ key: 'platform', label: 'No platform' })
@@ -102,11 +103,13 @@ const issueGroups = computed(() => {
   const items = collection.value || []
   const withIssue = (key) => items.filter((game) => issuesFor(game).some((issue) => issue.key === key)).length
   const needsDetails = items.filter((game) => issuesFor(game).some((issue) => ['condition', 'location', 'platform'].includes(issue.key))).length
+  const stalePrices = withIssue('stale')
   const complete = items.filter((game) => issuesFor(game).length === 0).length
   return [
     { key: 'all', icon: '✦', label: 'All reviews', count: items.length - complete, note: `${complete} complete` },
     { key: 'cover', icon: '▣', label: 'Covers', count: withIssue('cover'), note: 'Add or enrich artwork' },
     { key: 'value', icon: '€', label: 'Values', count: withIssue('value'), note: 'Set a current value' },
+    { key: 'stale', icon: '↻', label: 'Price review', count: stalePrices, note: 'No price check in 90 days' },
     { key: 'details', icon: '≡', label: 'Details', count: needsDetails, note: 'Condition, location, platform' },
   ]
 })
@@ -120,6 +123,7 @@ const filteredItems = computed(() => {
       const issues = issuesFor(game)
       if (activeFilter.value === 'cover') return issues.some((issue) => issue.key === 'cover')
       if (activeFilter.value === 'value') return issues.some((issue) => issue.key === 'value')
+      if (activeFilter.value === 'stale') return issues.some((issue) => issue.key === 'stale')
       if (activeFilter.value === 'details') return issues.some((issue) => ['condition', 'location', 'platform'].includes(issue.key))
       return issues.length > 0
     })
@@ -136,6 +140,15 @@ function coverSrc(game) {
   if (game.cover_url) return game.cover_url
   if (needsAutoCover(game.item_type)) return makeFallbackCoverDataUrl(game)
   return null
+}
+
+function isStalePrice(game) {
+  const value = game?.last_price_at
+  if (!value) return true
+  const normalized = String(value).includes('T') ? value : `${String(value).replace(' ', 'T')}Z`
+  const timestamp = new Date(normalized).getTime()
+  if (!Number.isFinite(timestamp)) return true
+  return Date.now() - timestamp > 90 * 24 * 60 * 60 * 1000
 }
 
 function typeLabel(type) {
@@ -177,7 +190,7 @@ onMounted(() => store.load())
 
 .care-overview {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
   gap: 0.7rem;
 }
 
@@ -251,6 +264,7 @@ onMounted(() => store.load())
 .issue-pill { padding: 0.15rem 0.4rem; border-radius: 999px; font-size: 0.69rem; font-weight: 600; background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
 .issue-cover { color: #e9ba74; background: rgba(233, 186, 116, 0.12); }
 .issue-value { color: #8fc5e7; background: rgba(143, 197, 231, 0.12); }
+.issue-stale { color: #d6aa78; background: rgba(214, 170, 120, 0.12); }
 .issue-platform { color: #e4a6d1; background: rgba(228, 166, 209, 0.12); }
 
 .care-actions { display: flex; gap: 0.45rem; }

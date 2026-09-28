@@ -243,6 +243,11 @@ class ApiSmokeTest(unittest.TestCase):
         entries = history.json()
         self.assertTrue(any(e.get("source") == "pricecharting" for e in entries))
 
+        listed = self.client.get("/api/games")
+        self.assertEqual(listed.status_code, 200)
+        matching_game = next(item for item in listed.json() if item["id"] == game_id)
+        self.assertTrue(matching_game.get("last_price_at"))
+
         self.client.delete(f"/api/games/{game_id}")
 
     def test_fetch_market_price_rejects_weak_local_match(self):

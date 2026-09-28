@@ -31,6 +31,7 @@ export interface Game {
   purchase_date?: string | null
   purchase_price?: number | null
   current_value?: number | null
+  last_price_at?: string | null
   notes?: string | null
   is_wishlist: number | boolean
   wishlist_max_price?: number | null

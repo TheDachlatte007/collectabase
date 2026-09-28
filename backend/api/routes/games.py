@@ -19,7 +19,8 @@ async def list_games(
 ):
     with get_db() as db:
         query = """
-            SELECT g.*, p.name as platform_name
+            SELECT g.*, p.name as platform_name,
+                   (SELECT MAX(ph.fetched_at) FROM price_history ph WHERE ph.game_id = g.id) AS last_price_at
             FROM games g
             LEFT JOIN platforms p ON g.platform_id = p.id
             WHERE 1=1
