@@ -11,6 +11,19 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 
+class TestDeploymentConfig(unittest.TestCase):
+    def test_compose_exposes_independent_persistent_host_paths(self):
+        compose_path = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+        compose = compose_path.read_text(encoding="utf-8")
+
+        self.assertIn("COLLECTABASE_DATA_DIR", compose)
+        self.assertIn("COLLECTABASE_UPLOADS_DIR", compose)
+        self.assertIn("COLLECTABASE_BACKUP_DIR", compose)
+        self.assertIn("target: /app/data", compose)
+        self.assertIn("target: /app/uploads", compose)
+        self.assertIn("target: /app/backups", compose)
+
+
 class ApiSmokeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

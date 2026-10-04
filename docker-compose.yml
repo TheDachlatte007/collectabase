@@ -8,13 +8,20 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Map the local data directory for persistent SQLite database
-      - ./data:/app/data
-      # Map the local uploads directory for persistent cover images
-      - ./uploads:/app/uploads
+      # Configure sources in stack.env for Portainer/TrueNAS deployments.
+      - type: bind
+        source: "${COLLECTABASE_DATA_DIR:-./data}"
+        target: /app/data
+      - type: bind
+        source: "${COLLECTABASE_UPLOADS_DIR:-./uploads}"
+        target: /app/uploads
+      - type: bind
+        source: "${COLLECTABASE_BACKUP_DIR:-./backups}"
+        target: /app/backups
     environment:
       - DATABASE_URL=sqlite:////app/data/games.db
       - UPLOADS_DIR=/app/uploads
+      - COLLECTABASE_BACKUP_DIR=/app/backups
       - TZ=Europe/Berlin
       # Optional: Uncomment and populate these if you want to set them system-wide instead of via the UI
       # - IGDB_CLIENT_ID=

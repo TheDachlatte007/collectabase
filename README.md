@@ -84,14 +84,17 @@ Create a new Stack and paste the contents of `docker-compose.yml`, or point to t
 
 | Volume | Purpose |
 |--------|---------|
-| `./data:/app/data` | SQLite database |
-| `./uploads:/app/uploads` | Locally cached cover images |
+| `COLLECTABASE_DATA_DIR:/app/data` | SQLite database |
+| `COLLECTABASE_UPLOADS_DIR:/app/uploads` | Locally cached cover images |
+| `COLLECTABASE_BACKUP_DIR:/app/backups` | Automatic portable ZIP archives |
 
-Your data survives container restarts and rebuilds.
+For local Docker these default to `./data`, `./uploads`, and `./backups`. For Portainer or TrueNAS, copy `stack.env.example` to `stack.env` and set absolute paths on a local ZFS dataset. Do not place SQLite on an SMB share or Windows mapped drive: bind a local host path into the container and share it separately for read-only access if needed.
+
+Your data survives container restarts, rebuilds, and image updates as long as these host paths remain unchanged.
 
 ### Full Backup & Restore
 
-The Settings page can create a single portable Collectabase ZIP backup. It includes collection data, lots, sales, price history and uploaded images. The scraped PriceCharting catalog is intentionally excluded because it is a rebuildable cache.
+The Settings page can create a single portable Collectabase ZIP backup. It includes collection data, lots, sales, price history, the local Price Browser catalog, and uploaded images.
 
 Provider credentials can be included only as a separately encrypted payload protected by a backup password. `ADMIN_API_KEY` is never included because it belongs to your Docker or Portainer environment.
 
@@ -99,7 +102,7 @@ To restore a collection, upload the ZIP in Settings, inspect its contents, then 
 
 ### Automatic Local Backups
 
-Automatic backups run daily at 02:15 by default and are stored under `data/backups/`. They include collection data and uploaded images, but never provider credentials. Configure the retention period or disable the schedule in **Settings → Maintenance Jobs**. Manual full backups remain the option for a portable backup with optional encrypted provider credentials.
+Automatic backups run daily at 02:15 by default and are stored under the configured `COLLECTABASE_BACKUP_DIR` (`./backups` locally). They include collection data, the local Price Browser catalog, and uploaded images, but never provider credentials. Older installations without a backup directory configured continue to use `data/backups/`. Configure retention or disable the schedule in **Settings > Maintenance Jobs**. Manual full backups remain the option for a portable backup with optional encrypted provider credentials.
 
 ---
 
@@ -213,3 +216,4 @@ This project is provided "as is", without warranty of any kind.
 Collectabase may integrate with or display third-party data, images, or metadata. All respective trademarks, images, and content remain the property of their respective owners.
 
 Users are responsible for ensuring their usage complies with applicable laws and the terms of any third-party services they connect to.
+
