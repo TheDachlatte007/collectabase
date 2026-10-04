@@ -259,7 +259,7 @@
 
           <div class="subpanel">
             <h3>Automatic Backup</h3>
-            <p class="text-muted mb-2">Create a local recovery ZIP every day at 02:15. Database and uploads are included; provider credentials are excluded.</p>
+            <p class="text-muted mb-2">Create a local recovery ZIP every day at 02:15. Database, Price Browser catalog and uploads are included; provider credentials are excluded.</p>
             <label class="clear-check">
               <input v-model="autoBackupEnabled" type="checkbox" />
               Enable daily local backup
@@ -321,7 +321,7 @@
         </div>
 
         <div class="backup-note mb-2">
-          <strong>CSV export is not a full backup:</strong> use Full Backup to include your collection, lots, price history and uploaded images in one ZIP file.
+          <strong>CSV export is not a full backup:</strong> use Full Backup to include your collection, lots, price history, Price Browser catalog and uploaded images in one ZIP file.
         </div>
 
         <div class="settings-columns">
@@ -351,7 +351,7 @@
         <div class="settings-columns">
           <div class="subpanel">
             <h3>Full Backup</h3>
-            <p class="text-muted mb-2">Create one portable ZIP with collection data, lots, price history and every uploaded image.</p>
+            <p class="text-muted mb-2">Create one portable ZIP with collection data, lots, price history, Price Browser catalog and every uploaded image.</p>
             <label class="clear-check">
               <input v-model="includeProviderCredentials" type="checkbox" />
               Include provider credentials in an encrypted file

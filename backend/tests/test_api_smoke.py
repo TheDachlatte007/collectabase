@@ -1,6 +1,8 @@
 import io
 import os
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -22,6 +24,25 @@ class TestDeploymentConfig(unittest.TestCase):
         self.assertIn("target: /app/data", compose)
         self.assertIn("target: /app/uploads", compose)
         self.assertIn("target: /app/backups", compose)
+
+
+class TestDatabaseConfiguration(unittest.TestCase):
+    def test_database_url_environment_override_is_used_outside_docker(self):
+        configured_url = "sqlite:////tmp/collectabase-configured.db"
+        environment = os.environ | {"DATABASE_URL": configured_url}
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from backend.db.session import get_database_url; print(get_database_url())",
+            ],
+            capture_output=True,
+            check=True,
+            cwd=Path(__file__).resolve().parents[2],
+            env=environment,
+            text=True,
+        )
+        self.assertEqual(result.stdout.strip(), configured_url)
 
 
 class ApiSmokeTest(unittest.TestCase):
@@ -355,6 +376,12 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertEqual(created.status_code, 200)
         game_id = created.json()["id"]
 
+        self._insert_price_catalog(
+            title="Backup Catalog Entry",
+            platform=platform["name"],
+            loose_eur=42.50,
+        )
+
         upload_path = Path(os.environ["UPLOADS_DIR"]) / "backup-roundtrip.png"
         upload_path.write_bytes(b"backup-image-content")
         with closing(sqlite3.connect(self._db_path())) as con:
@@ -388,6 +415,9 @@ class ApiSmokeTest(unittest.TestCase):
             self.assertIn("collection.sqlite", names)
             self.assertIn("uploads/backup-roundtrip.png", names)
             self.assertIn("encrypted-secrets.json", names)
+            manifest = __import__("json").loads(archive.read("manifest.json"))
+            self.assertTrue(manifest["includes"]["price_catalog_cache"])
+            self.assertGreaterEqual(manifest["counts"]["price_catalog"], 1)
             snapshot_dir = Path(tempfile.mkdtemp(prefix="collectabase_snapshot_"))
             snapshot_path = snapshot_dir / "collection.sqlite"
             snapshot_path.write_bytes(archive.read("collection.sqlite"))
@@ -395,7 +425,11 @@ class ApiSmokeTest(unittest.TestCase):
             cleartext_secret = con.execute(
                 "SELECT value FROM app_meta WHERE key = ?", ("cfg:rawg_api_key",)
             ).fetchone()
+            catalog_entry = con.execute(
+                "SELECT loose_eur FROM price_catalog WHERE title = ?", ("Backup Catalog Entry",)
+            ).fetchone()
         self.assertIsNone(cleartext_secret)
+        self.assertEqual(catalog_entry[0], 42.50)
 
         inspected = self.client.post(
             "/api/backups/inspect",
@@ -458,6 +492,27 @@ class ApiSmokeTest(unittest.TestCase):
             self.assertIn("manifest.json", archive.namelist())
             self.assertIn("collection.sqlite", archive.namelist())
             self.assertNotIn("encrypted-secrets.json", archive.namelist())
+
+    def test_automatic_backup_uses_configured_backup_directory(self):
+        from backend.services.backup_service import create_automatic_backup
+
+        configured_backup_dir = Path(tempfile.mkdtemp(prefix="collectabase_backup_destination_"))
+        with patch.dict(os.environ, {"COLLECTABASE_BACKUP_DIR": str(configured_backup_dir)}):
+            result = create_automatic_backup(retention=1)
+
+        archive_path = Path(result["path"])
+        self.assertEqual(archive_path.parent, configured_backup_dir)
+        self.assertTrue(archive_path.exists())
+
+    def test_settings_info_counts_backups_in_configured_directory(self):
+        configured_backup_dir = Path(tempfile.mkdtemp(prefix="collectabase_settings_backups_"))
+        (configured_backup_dir / "collectabase-auto-backup-20261005T000000Z.zip").write_bytes(b"backup")
+
+        with patch.dict(os.environ, {"COLLECTABASE_BACKUP_DIR": str(configured_backup_dir)}):
+            response = self.client.get("/api/settings/info")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["auto_backup_count"], 1)
 
 
 if __name__ == "__main__":

@@ -3,10 +3,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 def get_database_url() -> str:
-    # Inside Docker, /app always exists – use the environment variable or a safe default.
+    configured_url = os.getenv("DATABASE_URL")
+    if configured_url:
+        return configured_url
+
+    # Inside Docker, /app always exists - use the container default.
     # SQLite absolute path on Linux needs 4 slashes: sqlite:////absolute/path
     if os.path.exists("/app"):
-        return os.getenv("DATABASE_URL", "sqlite:////app/data/games.db")
+        return "sqlite:////app/data/games.db"
 
     # Local development: store next to the backend source
     local_data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "data")

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ...database import get_app_meta_many, get_db, set_app_meta
+from ...services.backup_service import _backup_destination_dir
 from ...version import APP_VERSION
 from ..security import admin_protection_status, require_admin_access
 
@@ -178,7 +179,7 @@ async def settings_info():
             game_items = total_items
             non_game_items = 0
 
-    backup_dir = Path(db_path).parent / "backups"
+    backup_dir = _backup_destination_dir()
     auto_backup_files = list(backup_dir.glob("collectabase-auto-backup-*.zip")) if backup_dir.is_dir() else []
 
     meta = get_app_meta_many(

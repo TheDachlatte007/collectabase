@@ -61,6 +61,13 @@ def _uploads_path() -> Path:
     return Path(os.getenv("UPLOADS_DIR", str(default))).resolve()
 
 
+def _backup_destination_dir() -> Path:
+    configured = os.getenv("COLLECTABASE_BACKUP_DIR", "").strip()
+    if configured:
+        return Path(configured).resolve()
+    return _sqlite_database_path().parent / "backups"
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -100,15 +107,9 @@ def _sanitize_snapshot(snapshot: Path, include_secrets: bool) -> tuple[dict[str,
             db.execute("DELETE FROM app_meta WHERE key LIKE ?", (f"{SECRET_PREFIX}%",))
         except sqlite3.OperationalError:
             pass
-        # The catalog is an updatable scrape cache, not collection data. Excluding it keeps
-        # portable backups small while current values and price history remain intact.
-        try:
-            db.execute("DELETE FROM price_catalog")
-        except sqlite3.OperationalError:
-            pass
         counts = {
             table: _table_count(db, table)
-            for table in ("games", "item_images", "price_history", "lots", "lot_items", "lot_sales")
+            for table in ("games", "item_images", "price_history", "price_catalog", "lots", "lot_items", "lot_sales")
         }
         db.commit()
         db.execute("VACUUM")
@@ -190,7 +191,7 @@ def create_backup(include_secrets: bool = False, password: str = "") -> tuple[Pa
                 "database": True,
                 "uploads": True,
                 "provider_credentials": bool(encrypted_secrets),
-                "price_catalog_cache": False,
+                "price_catalog_cache": True,
             },
             "counts": counts,
             "uploads": {"files": len(upload_files), "bytes": upload_bytes},
@@ -218,7 +219,7 @@ def create_automatic_backup(retention: int = 14) -> dict[str, Any]:
         raise BackupError("Automatic backup retention must be at least one archive.")
 
     archive_path, _filename, manifest = create_backup(include_secrets=False)
-    destination_dir = _sqlite_database_path().parent / "backups"
+    destination_dir = _backup_destination_dir()
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / _automatic_backup_filename()
     try:
@@ -397,7 +398,7 @@ def _current_secret_values() -> dict[str, str]:
 
 def _create_pre_restore_backup() -> str:
     archive_path, filename, _ = create_backup(include_secrets=False)
-    destination_dir = _sqlite_database_path().parent / "backups"
+    destination_dir = _backup_destination_dir()
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / f"pre-restore-{filename}"
     shutil.move(str(archive_path), destination)
