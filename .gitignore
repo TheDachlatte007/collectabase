@@ -52,6 +52,8 @@ stack.env
 # Dev / CI artifacts
 .planning/
 .claude/
+AGENTS.md
+CLAUDE.md
 .pytest_cache/
 error.log
 test_import.py
