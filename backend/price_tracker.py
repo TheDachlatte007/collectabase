@@ -17,6 +17,7 @@ from .services.price.catalog import (
     _lookup_local_catalog_price, scrape_platform_catalog,
     _upsert_catalog_entries, _derive_platform_label
 )
+from .services.price.platforms import canonicalize_platform
 from .services.price.providers.ebay import fetch_ebay_market_price, _ebay_credentials
 from .services.price.providers.rawg import fetch_rawg_reference, _rawg_key
 from .services.price.providers.pricecharting import (
@@ -645,8 +646,9 @@ async def search_catalog(
         conditions.append("title LIKE ?")
         params.append(f"%{search}%")
     if platform:
-        conditions.append("platform = ?")
-        params.append(platform)
+        identity = canonicalize_platform(platform)
+        conditions.append("(platform_key = ? OR LOWER(platform) = LOWER(?))")
+        params.extend([identity.key, identity.label])
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     offset = (page - 1) * limit
@@ -690,7 +692,8 @@ async def clear_catalog(platform: Optional[str] = None, _admin: None = Depends(r
     """Delete all (or one platform's) entries from the price catalog."""
     with get_db() as db:
         if platform:
-            db.execute("DELETE FROM price_catalog WHERE platform = ?", (platform,))
+            identity = canonicalize_platform(platform)
+            db.execute("DELETE FROM price_catalog WHERE platform_key = ? OR LOWER(platform) = LOWER(?)", (identity.key, identity.label))
         else:
             db.execute("DELETE FROM price_catalog")
         db.commit()

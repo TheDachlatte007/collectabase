@@ -7,38 +7,7 @@ from typing import Optional
 import httpx
 
 from ...database import get_app_meta_many, get_db, dict_from_row
-
-PLATFORM_SLUGS = {
-    "playstation 5": "playstation-5",
-    "playstation 4": "playstation-4",
-    "playstation 3": "playstation-3",
-    "playstation 2": "playstation-2",
-    "playstation": "playstation",
-    "psp": "psp",
-    "ps vita": "ps-vita",
-    "xbox series x/s": "xbox-series-x",
-    "xbox one": "xbox-one",
-    "xbox 360": "xbox-360",
-    "xbox": "xbox",
-    "nintendo switch": "nintendo-switch",
-    "nintendo switch 2": "nintendo-switch-2",
-    "wii u": "wii-u",
-    "wii": "wii",
-    "gamecube": "gamecube",
-    "nintendo 64": "nintendo-64",
-    "snes": "super-nintendo",
-    "nes": "nes",
-    "game boy advance": "gameboy-advance",
-    "game boy color": "gameboy-color",
-    "game boy": "gameboy",
-    "nintendo 3ds": "3ds",
-    "nintendo ds": "nintendo-ds",
-    "sega dreamcast": "sega-dreamcast",
-    "sega saturn": "sega-saturn",
-    "sega genesis/mega drive": "sega-genesis",
-    "sega master system": "sega-master-system",
-    "sega game gear": "game-gear",
-}
+from .platforms import PLATFORM_SLUGS
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Collectabase/1.0)"}
 
@@ -156,3 +125,4 @@ def _catalog_match_score(query_title: str, row_title: str) -> float:
     seq = SequenceMatcher(None, query_title, row_title).ratio()
     contains_bonus = 0.85 if (query_title in row_title or row_title in query_title) else 0.0
     return max(seq, overlap * 0.9, contains_bonus)
+

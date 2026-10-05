@@ -18,6 +18,7 @@ from .utils import (
     _prices_differ,
     _to_eur,
 )
+from .platforms import canonicalize_platform
 
 logger = logging.getLogger("collectabase.catalog")
 
@@ -26,7 +27,8 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
     norm_title = _normalize_text(title)
     if not norm_title: return None
 
-    norm_platform = _normalize_text(platform_name)
+    identity = canonicalize_platform(platform_name) if platform_name else None
+    norm_platform = _normalize_text(identity.label if identity else platform_name)
     title_tokens = [t for t in _clean_catalog_title(norm_title, norm_platform).split() if len(t) >= 3]
 
     try:
@@ -34,15 +36,15 @@ def _lookup_local_catalog_price(title: str, platform_name: str):
             rows = []
             if norm_platform:
                 if title_tokens:
-                    sql = "SELECT * FROM price_catalog WHERE LOWER(platform) = LOWER(?)"
-                    params = [norm_platform]
+                    sql = "SELECT * FROM price_catalog WHERE (platform_key = ? OR LOWER(platform) = LOWER(?))"
+                    params = [identity.key, norm_platform]
                     for token in title_tokens[:3]:
                         sql += " AND LOWER(title) LIKE ?"
                         params.append(f"%{token}%")
                     sql += " ORDER BY scraped_at DESC LIMIT 2000"
                     rows = db.execute(sql, tuple(params)).fetchall()
                 if not rows:
-                    rows = db.execute("SELECT * FROM price_catalog WHERE LOWER(platform) = LOWER(?) ORDER BY scraped_at DESC LIMIT 3000", (norm_platform,)).fetchall()
+                    rows = db.execute("SELECT * FROM price_catalog WHERE (platform_key = ? OR LOWER(platform) = LOWER(?)) ORDER BY scraped_at DESC LIMIT 3000", (identity.key, norm_platform)).fetchall()
             if not rows:
                 if title_tokens:
                     sql = "SELECT * FROM price_catalog WHERE 1=1"
@@ -231,15 +233,16 @@ def _upsert_catalog_entries(entries: list, eur_rate: float):
     inserted = updated = unchanged = duplicates_removed = 0
     with get_db() as db:
         for e in deduped_entries:
-            platform = e["platform"]
+            identity = canonicalize_platform(e["platform"])
+            platform = identity.label
             title = e["title"]
             pc_id = (e.get("pricecharting_id") or "").strip()
 
             existing_rows = []
             if pc_id:
-                existing_rows = db.execute("SELECT id, loose_usd, cib_usd, new_usd FROM price_catalog WHERE platform = ? AND pricecharting_id = ? ORDER BY id DESC", (platform, pc_id)).fetchall()
+                existing_rows = db.execute("SELECT id, loose_usd, cib_usd, new_usd FROM price_catalog WHERE platform_key = ? AND pricecharting_id = ? ORDER BY id DESC", (identity.key, pc_id)).fetchall()
             if not existing_rows:
-                existing_rows = db.execute("SELECT id, loose_usd, cib_usd, new_usd FROM price_catalog WHERE platform = ? AND LOWER(title) = LOWER(?) ORDER BY id DESC", (platform, title)).fetchall()
+                existing_rows = db.execute("SELECT id, loose_usd, cib_usd, new_usd FROM price_catalog WHERE platform_key = ? AND LOWER(title) = LOWER(?) ORDER BY id DESC", (identity.key, title)).fetchall()
 
             keep = existing_rows[0] if existing_rows else None
             if len(existing_rows) > 1:
@@ -252,8 +255,8 @@ def _upsert_catalog_entries(entries: list, eur_rate: float):
 
             if not keep:
                 db.execute(
-                    "INSERT INTO price_catalog (pricecharting_id, title, platform, loose_usd, cib_usd, new_usd, loose_eur, cib_eur, new_eur, page_url, scraped_at, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-                    (pc_id, title, platform, loose_usd, cib_usd, new_usd, loose_eur, cib_eur, new_eur, e["page_url"]),
+                    "INSERT INTO price_catalog (pricecharting_id, title, platform, platform_key, loose_usd, cib_usd, new_usd, loose_eur, cib_eur, new_eur, page_url, scraped_at, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                    (pc_id, title, platform, identity.key, loose_usd, cib_usd, new_usd, loose_eur, cib_eur, new_eur, e["page_url"]),
                 )
                 inserted += 1
                 continue
@@ -261,14 +264,14 @@ def _upsert_catalog_entries(entries: list, eur_rate: float):
             prices_changed = _prices_differ(keep["loose_usd"], loose_usd) or _prices_differ(keep["cib_usd"], cib_usd) or _prices_differ(keep["new_usd"], new_usd)
             if prices_changed:
                 db.execute(
-                    "UPDATE price_catalog SET pricecharting_id = ?, title = ?, platform = ?, loose_usd = ?, cib_usd = ?, new_usd = ?, loose_eur = ?, cib_eur = ?, new_eur = ?, page_url = ?, scraped_at = CURRENT_TIMESTAMP, changed_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (pc_id, title, platform, loose_usd, cib_usd, new_usd, loose_eur, cib_eur, new_eur, e["page_url"], keep["id"]),
+                    "UPDATE price_catalog SET pricecharting_id = ?, title = ?, platform = ?, platform_key = ?, loose_usd = ?, cib_usd = ?, new_usd = ?, loose_eur = ?, cib_eur = ?, new_eur = ?, page_url = ?, scraped_at = CURRENT_TIMESTAMP, changed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (pc_id, title, platform, identity.key, loose_usd, cib_usd, new_usd, loose_eur, cib_eur, new_eur, e["page_url"], keep["id"]),
                 )
                 updated += 1
             else:
                 db.execute(
-                    "UPDATE price_catalog SET pricecharting_id = ?, title = ?, platform = ?, loose_eur = ?, cib_eur = ?, new_eur = ?, page_url = ?, scraped_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (pc_id, title, platform, loose_eur, cib_eur, new_eur, e["page_url"], keep["id"]),
+                    "UPDATE price_catalog SET pricecharting_id = ?, title = ?, platform = ?, platform_key = ?, loose_eur = ?, cib_eur = ?, new_eur = ?, page_url = ?, scraped_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (pc_id, title, platform, identity.key, loose_eur, cib_eur, new_eur, e["page_url"], keep["id"]),
                 )
                 unchanged += 1
         db.commit()
@@ -278,7 +281,8 @@ def _upsert_catalog_entries(entries: list, eur_rate: float):
 def _platform_label_from_slug(slug: str) -> Optional[str]:
     if not slug: return None
     for label, mapped_slug in PLATFORM_SLUGS.items():
-        if mapped_slug == slug: return label
+        if mapped_slug == slug:
+            return canonicalize_platform(label).label
     return None
 
 def _derive_platform_label(page_url: Optional[str]) -> Optional[str]:

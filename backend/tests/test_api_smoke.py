@@ -45,6 +45,21 @@ class TestDatabaseConfiguration(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), configured_url)
 
 
+class PlatformCatalogTests(unittest.TestCase):
+    def test_known_aliases_and_unknown_platforms_have_stable_identities(self):
+        from backend.services.price.platforms import canonicalize_platform
+
+        self.assertEqual(canonicalize_platform("PlayStation").key, "playstation")
+        self.assertEqual(canonicalize_platform("playstation").label, "PlayStation")
+        self.assertEqual(canonicalize_platform("PS5").key, "playstation-5")
+        self.assertEqual(canonicalize_platform("Nintendo Switch").label, "Nintendo Switch")
+        self.assertEqual(canonicalize_platform("nintendo switch").key, "nintendo-switch")
+        self.assertEqual(canonicalize_platform("Xbox One").key, "xbox-one")
+        unknown = canonicalize_platform("Arcade Cabinet")
+        self.assertEqual(unknown.key, "arcade-cabinet")
+        self.assertEqual(unknown.label, "Arcade Cabinet")
+
+
 class ApiSmokeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

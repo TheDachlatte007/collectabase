@@ -99,6 +99,7 @@ class PriceCatalog(Base):
     pricecharting_id = Column(String)
     title = Column(String, nullable=False)
     platform = Column(String, nullable=False)
+    platform_key = Column(String)
     loose_usd = Column(Float)
     cib_usd = Column(Float)
     new_usd = Column(Float)
@@ -112,6 +113,7 @@ class PriceCatalog(Base):
     __table_args__ = (
         Index('idx_price_catalog_title', title, sqlite_where=None),
         Index('idx_price_catalog_platform', platform),
+        Index('idx_price_catalog_platform_key', platform_key),
         Index('idx_price_catalog_platform_title', platform, title, sqlite_where=None),
         Index('idx_price_catalog_platform_pcid', platform, pricecharting_id),
     )
