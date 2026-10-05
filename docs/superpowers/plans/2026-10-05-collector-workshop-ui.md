@@ -37,21 +37,21 @@
 
 **Interfaces:** Semantic tokens cover canvas, surface, raised surface, border, focus, info, success, warning, danger, and data typography. `setUiPrefs(next)` and current local-storage preference key remain unchanged.
 
-- [ ] **Step 1: Add preference regression assertions and visual checklist**
+- [x] **Step 1: Add preference regression assertions and visual checklist**
 
 Add a small utility test/check for unknown stored preferences falling back to `indigo`/`comfortable`. Add a documented 360px, 768px, and 1440px UI acceptance checklist.
 
-- [ ] **Step 2: Record baseline quality gates**
+- [x] **Step 2: Record baseline quality gates**
 
 Run: `npm run build && npx vue-tsc --noEmit`
 
 Expected: PASS before visual changes.
 
-- [ ] **Step 3: Refine tokens and shell behavior**
+- [x] **Step 3: Refine tokens and shell behavior**
 
 Replace generic glass-heavy defaults with solid layered surfaces, fine borders, focus states, semantic color tokens, and controlled shadows. Replace emoji navigation with consistent inline SVG icons. Retain four mobile navigation items, clear active text/indicator, and safe-area padding.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `npm run build && npx vue-tsc --noEmit`
 
@@ -72,15 +72,15 @@ git commit -m "style: establish collector workshop foundations"
 
 **Interfaces:** Collection cards show title only once in their information region. Game Detail provides one visible primary action plus a labelled overflow menu for secondary actions.
 
-- [ ] **Step 1: Capture core-flow visual baselines**
+- [x] **Step 1: Capture core-flow visual baselines**
 
 Use a local seeded database to capture collection, detail, and Collection Care at desktop and 360px. List expected actions: search, open item, edit, fetch/apply price, manual price, and care resolution.
 
-- [ ] **Step 2: Implement card and action hierarchy**
+- [x] **Step 2: Implement card and action hierarchy**
 
 Remove duplicate/truncated placeholder title rendering while keeping accessible fallbacks. Use a compact action bar: visible edit/primary action and menu for enrichment, external lookups, cover actions, and destructive-action confirmation. Give Care states a consistent status layout.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run: `npm run build && npx vue-tsc --noEmit`
 
@@ -105,15 +105,15 @@ git commit -m "style: clarify collection and detail actions"
 
 **Interfaces:** Price Browser owns an intentional scroll region for wide data. Lots switch to compact expandable records at mobile breakpoint. Forms share a one-column mobile rule.
 
-- [ ] **Step 1: Add viewport acceptance scenarios**
+- [x] **Step 1: Add viewport acceptance scenarios**
 
 Create a checklist for 360px and 1440px covering catalog filter/search/link, Lot edit/save/sale, settings backup/restore, add-game search, import, wishlist CTA, and stats cards.
 
-- [ ] **Step 2: Implement responsive data patterns**
+- [x] **Step 2: Implement responsive data patterns**
 
 Keep wide catalog columns but make overflow deliberate, keep query/filter controls outside scroll region, and use muted `N/A` for missing prices. Rework Lot rows into compact expandable mobile cards. Apply common toolbars, empty/status panels, form sections, and touch-safe action grouping across support views. Do not alter API behavior.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run: `npm run build && npx vue-tsc --noEmit`
 
