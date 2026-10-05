@@ -91,29 +91,32 @@
 .more-card {
   display: flex;
   align-items: flex-start;
-  gap: 0.65rem;
-  background: var(--bg-light);
-  border: 1px solid var(--border);
-  border-radius: 0.6rem;
-  padding: 0.8rem 0.9rem;
+  gap: 0.75rem;
+  background: var(--surface-raised, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 0.9rem 1rem;
   text-decoration: none;
   color: var(--text);
-  transition: border-color 0.18s ease, transform 0.18s ease;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
 }
 
 .more-card:hover {
   border-color: var(--primary);
+  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
   transform: translateY(-1px);
 }
 
 .more-icon {
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 0.45rem;
-  background: var(--bg);
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: var(--radius-sm, 0.5rem);
+  background: var(--surface, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--glass-border);
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  font-size: 1.05rem;
 }
 
 .more-copy {
@@ -121,12 +124,19 @@
 }
 
 .more-title {
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
 .more-sub {
   margin-top: 0.2rem;
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+@media (max-width: 480px) {
+  .more-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

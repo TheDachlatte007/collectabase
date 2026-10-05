@@ -556,6 +556,7 @@ onMounted(() => {
 .stat-value { 
   font-size: 2.25rem; 
   font-weight: 800; 
+  font-family: var(--font-data);
   background: linear-gradient(to bottom, #fff, #94a3b8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -647,7 +648,7 @@ onMounted(() => {
 
 .widget-info { display: flex; flex-direction: column; gap: 0.25rem; }
 .widget-title { font-weight: 600; font-size: 1rem; }
-.widget-value { font-size: 0.9rem; font-weight: 700; }
+.widget-value { font-size: 0.9rem; font-weight: 700; font-family: var(--font-data); }
 
 .history-card { padding: 1.8rem; }
 .history-chart-wrapper { height: 350px; width: 100%; }
@@ -670,6 +671,7 @@ onMounted(() => {
 
 .lot-summary-card strong {
   font-size: 1.25rem;
+  font-family: var(--font-data);
 }
 
 .summary-label {
@@ -737,5 +739,12 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .charts-row, .top-widgets-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 540px) {
+  .stats-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+  .stat-card { padding: 1.25rem 1rem; }
+  .history-card, .chart-card { padding: 1.2rem; }
+  .lot-summary-grid { grid-template-columns: 1fr; }
 }
 </style>

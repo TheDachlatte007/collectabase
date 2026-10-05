@@ -944,6 +944,7 @@ onMounted(loadInfo)
 .kpi-value {
   font-size: 1.2rem;
   font-weight: 700;
+  font-family: var(--font-data);
 }
 
 .kpi-sub {
@@ -1091,16 +1092,17 @@ onMounted(loadInfo)
 .limit-input {
   width: 80px;
   padding: 0.4rem;
-  border-radius: 0.4rem;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border-radius: var(--radius-sm, 0.4rem);
+  border: 1px solid var(--glass-border);
+  background: var(--surface, rgba(0, 0, 0, 0.2));
   color: var(--text);
 }
 
 .result-box {
-  background: var(--bg);
+  background: var(--surface, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--glass-border);
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md, 0.5rem);
   font-size: 0.9rem;
   color: var(--success);
 }
@@ -1127,6 +1129,23 @@ onMounted(loadInfo)
   .import-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .appearance-grid,
+  .secrets-grid,
+  .info-grid,
+  .run-grid,
+  .settings-columns,
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .secret-actions {
+    flex-direction: column;
+  }
+
+  .secret-actions .btn {
+    width: 100%;
   }
 }
 </style>

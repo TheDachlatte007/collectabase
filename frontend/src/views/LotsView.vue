@@ -143,43 +143,87 @@
               <span class="pill">{{ selectedLot.summary.item_count }}</span>
             </div>
             <div v-if="!selectedLot.items.length" class="text-muted">No items yet.</div>
-            <div v-else class="table-wrap">
-              <table class="lot-table">
-                <thead>
-                  <tr><th>Item</th><th>Amount</th><th>Unit Est.</th><th>Override</th><th>Allocated</th><th>Status</th><th>Sale</th><th></th></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="item in selectedLot.items" :key="item.id">
-                    <td>
+            <div v-else>
+              <!-- Desktop Table -->
+              <div class="table-wrap desktop-only">
+                <table class="lot-table">
+                  <thead>
+                    <tr><th>Item</th><th>Amount</th><th>Unit Est.</th><th>Override</th><th>Allocated</th><th>Status</th><th>Sale</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in selectedLot.items" :key="item.id">
+                      <td>
+                        <strong>{{ item.title_snapshot }}</strong>
+                        <small class="text-muted block">{{ item.platform_snapshot || 'No platform' }} / {{ item.item_type_snapshot || 'game' }}</small>
+                        <small class="text-muted block">Line est.: {{ formatCurrency(item.estimated_total_value) }}</small>
+                        <router-link v-if="item.game_id" :to="`/game/${item.game_id}`" class="mini-link">Open linked item</router-link>
+                      </td>
+                      <td><input v-model="itemDrafts[item.id].quantity" type="number" min="1" step="1" /></td>
+                      <td><input v-model="itemDrafts[item.id].estimated_value" type="number" min="0" step="0.01" /></td>
+                      <td><input v-model="itemDrafts[item.id].cost_basis_override" type="number" min="0" step="0.01" placeholder="Auto" /></td>
+                      <td>
+                        <strong>{{ formatCurrency(item.allocated_cost_basis) }}</strong>
+                        <small class="text-muted block">{{ item.allocation_method }} / {{ formatCurrency(item.allocated_unit_cost_basis) }} each</small>
+                      </td>
+                      <td>
+                        <select v-model="itemDrafts[item.id].status">
+                          <option value="inventory">Inventory</option>
+                          <option value="sold">Sold</option>
+                          <option value="kept">Kept</option>
+                          <option value="discarded">Discarded</option>
+                        </select>
+                      </td>
+                      <td>{{ item.sale ? formatCurrency(item.sale.net_proceeds) : '-' }}</td>
+                      <td class="actions">
+                        <button class="btn btn-secondary btn-small" :disabled="savingItemId === item.id" @click="saveItem(item)">Save</button>
+                        <button class="btn btn-secondary btn-small" @click="editSale(item)">{{ item.sale ? 'Edit Sale' : 'Add Sale' }}</button>
+                        <button class="btn btn-danger btn-small" :disabled="deletingItemId === item.id" @click="deleteItem(item)">Delete</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Mobile Compact Expandable Records -->
+              <div class="lot-cards-mobile mobile-only">
+                <article v-for="item in selectedLot.items" :key="item.id" class="lot-mobile-card">
+                  <header class="lot-mobile-header" @click="toggleItemExpand(item.id)">
+                    <div class="lot-mobile-title-block">
                       <strong>{{ item.title_snapshot }}</strong>
-                      <small class="text-muted block">{{ item.platform_snapshot || 'No platform' }} / {{ item.item_type_snapshot || 'game' }}</small>
-                      <small class="text-muted block">Line est.: {{ formatCurrency(item.estimated_total_value) }}</small>
-                      <router-link v-if="item.game_id" :to="`/game/${item.game_id}`" class="mini-link">Open linked item</router-link>
-                    </td>
-                    <td><input v-model="itemDrafts[item.id].quantity" type="number" min="1" step="1" /></td>
-                    <td><input v-model="itemDrafts[item.id].estimated_value" type="number" min="0" step="0.01" /></td>
-                    <td><input v-model="itemDrafts[item.id].cost_basis_override" type="number" min="0" step="0.01" placeholder="Auto" /></td>
-                    <td>
-                      <strong>{{ formatCurrency(item.allocated_cost_basis) }}</strong>
-                      <small class="text-muted block">{{ item.allocation_method }} / {{ formatCurrency(item.allocated_unit_cost_basis) }} each</small>
-                    </td>
-                    <td>
-                      <select v-model="itemDrafts[item.id].status">
-                        <option value="inventory">Inventory</option>
-                        <option value="sold">Sold</option>
-                        <option value="kept">Kept</option>
-                        <option value="discarded">Discarded</option>
-                      </select>
-                    </td>
-                    <td>{{ item.sale ? formatCurrency(item.sale.net_proceeds) : '-' }}</td>
-                    <td class="actions">
+                      <span class="text-muted text-xs block">{{ item.platform_snapshot || 'No platform' }} · {{ item.item_type_snapshot || 'game' }}</span>
+                    </div>
+                    <div class="lot-mobile-meta">
+                      <span class="pill status-pill">{{ itemDrafts[item.id]?.status || item.status }}</span>
+                      <span class="expand-caret">{{ expandedItemIds[item.id] ? '▴' : '▾' }}</span>
+                    </div>
+                  </header>
+                  <div v-show="expandedItemIds[item.id]" class="lot-mobile-body">
+                    <div class="form-grid mobile-form-grid">
+                      <div class="form-group"><label>Amount</label><input v-model="itemDrafts[item.id].quantity" type="number" min="1" step="1" /></div>
+                      <div class="form-group"><label>Unit Est. (€)</label><input v-model="itemDrafts[item.id].estimated_value" type="number" min="0" step="0.01" /></div>
+                      <div class="form-group"><label>Override (€)</label><input v-model="itemDrafts[item.id].cost_basis_override" type="number" min="0" step="0.01" placeholder="Auto" /></div>
+                      <div class="form-group"><label>Status</label>
+                        <select v-model="itemDrafts[item.id].status">
+                          <option value="inventory">Inventory</option>
+                          <option value="sold">Sold</option>
+                          <option value="kept">Kept</option>
+                          <option value="discarded">Discarded</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="lot-mobile-stats mt-2">
+                      <div><small class="text-muted">Allocated</small><strong>{{ formatCurrency(item.allocated_cost_basis) }}</strong></div>
+                      <div><small class="text-muted">Unit Cost</small><span>{{ formatCurrency(item.allocated_unit_cost_basis) }}</span></div>
+                      <div v-if="item.sale"><small class="text-muted">Sale Net</small><strong>{{ formatCurrency(item.sale.net_proceeds) }}</strong></div>
+                    </div>
+                    <div class="actions mt-2">
                       <button class="btn btn-secondary btn-small" :disabled="savingItemId === item.id" @click="saveItem(item)">Save</button>
                       <button class="btn btn-secondary btn-small" @click="editSale(item)">{{ item.sale ? 'Edit Sale' : 'Add Sale' }}</button>
                       <button class="btn btn-danger btn-small" :disabled="deletingItemId === item.id" @click="deleteItem(item)">Delete</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    </div>
+                  </div>
+                </article>
+              </div>
             </div>
           </div>
 
@@ -260,6 +304,11 @@ const lotForm = reactive(makeLot())
 const itemForm = reactive(makeItem())
 const saleForm = reactive(makeSale())
 const itemDrafts = reactive({})
+const expandedItemIds = reactive({})
+
+function toggleItemExpand(id) {
+  expandedItemIds[id] = !expandedItemIds[id]
+}
 
 const saleItems = computed(() => (selectedLot.value?.items || []).filter((item) => !item.sale || Number(saleForm.item_id) === item.id))
 const showLibraryDropdown = computed(() => {
@@ -650,13 +699,81 @@ onMounted(() => loadLots())
 .btn-small { min-height:34px; padding:.4rem .75rem; font-size:.82rem; }
 .mini-link { display:block; margin-top:.2rem; color:var(--text-muted); }
 .kpi label, .compare-label { display:block; margin-bottom:.2rem; color:var(--text-muted); font-size:.78rem; }
-.kpi strong { font-size:1.15rem; }
+.kpi strong { font-size:1.15rem; font-family: var(--font-data); }
 .compare-card { padding:1rem 1.1rem; }
 .compare-row { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:1rem; }
-.compare-row strong { font-size:1.1rem; }
+.compare-row strong { font-size:1.1rem; font-family: var(--font-data); }
 .empty-state { min-height:220px; display:grid; place-items:center; color:var(--text-muted); }
 .value-positive { color:var(--success); }
 .value-negative { color:var(--error); }
+
+/* Mobile & Desktop toggle helpers */
+.mobile-only { display: none; }
+.desktop-only { display: block; }
+
+/* Mobile Lot Item Cards */
+.lot-cards-mobile { display: grid; gap: 0.65rem; }
+.lot-mobile-card {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 0.75rem);
+  background: var(--surface-raised, rgba(255, 255, 255, 0.03));
+  overflow: hidden;
+}
+.lot-mobile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  gap: 0.5rem;
+}
+.lot-mobile-title-block { min-width: 0; }
+.lot-mobile-title-block strong { display: block; font-size: 0.92rem; word-break: break-word; }
+.text-xs { font-size: 0.75rem; }
+.lot-mobile-meta { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+.status-pill { text-transform: capitalize; font-size: 0.75rem; height: 1.5rem; padding: 0 0.5rem; }
+.expand-caret { font-size: 0.8rem; color: var(--text-muted); width: 1rem; text-align: center; }
+.lot-mobile-body {
+  padding: 0.75rem 0.85rem;
+  border-top: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.15);
+}
+.mobile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.lot-mobile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm, 0.5rem);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--glass-border);
+}
+.lot-mobile-stats strong, .lot-mobile-stats span {
+  display: block;
+  font-family: var(--font-data);
+  font-size: 0.88rem;
+}
+.lot-table td strong, .lot-table td .font-data {
+  font-family: var(--font-data);
+}
+
 @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } .sidebar { position:static; } }
-@media (max-width: 768px) { .form-grid, .kpis, .compare-row { grid-template-columns: 1fr; } .page-head, .section-head { flex-direction:column; } .actions { width:100%; } }
+@media (max-width: 768px) {
+  .desktop-only { display: none !important; }
+  .mobile-only { display: block !important; }
+  .form-grid, .kpis, .compare-row { grid-template-columns: 1fr; }
+  .page-head, .section-head { flex-direction:column; }
+  .actions { width:100%; }
+  .mobile-form-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .mobile-form-grid { grid-template-columns: 1fr; }
+  .lot-mobile-stats { grid-template-columns: 1fr; gap: 0.35rem; }
+}
 </style>

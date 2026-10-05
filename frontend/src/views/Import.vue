@@ -181,9 +181,10 @@ async function exportCsv() {
 
 <style scoped>
 .result {
-  background: var(--bg);
+  background: var(--surface, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--glass-border);
   padding: 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md, 0.5rem);
 }
 
 .error-block {
@@ -194,5 +195,15 @@ async function exportCsv() {
   margin: 0.25rem 0 0 1.25rem;
   font-size: 0.85rem;
   color: var(--error, #ef4444);
+}
+
+input[type="file"] {
+  max-width: 100%;
+}
+
+@media (max-width: 480px) {
+  .btn {
+    width: 100%;
+  }
 }
 </style>

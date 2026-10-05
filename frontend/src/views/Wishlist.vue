@@ -16,6 +16,7 @@
           <img
             v-if="coverSrc(game)"
             :src="coverSrc(game)"
+            :alt="game.title"
             class="cover-image"
             @error="markBroken(game.id)"
           />
@@ -61,26 +62,28 @@ onMounted(() => store.load())
 
 <style scoped>
 .game-card {
-  background: var(--bg-light);
-  border-radius: 0.75rem;
+  background: var(--surface-raised, rgba(255, 255, 255, 0.03));
+  border-radius: var(--radius-md, 0.75rem);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   position: relative;
-  transition: transform 0.2s;
+  transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .game-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
+  border-color: var(--primary);
 }
 
 .cover {
   aspect-ratio: 3/4;
-  background: var(--bg);
+  background: var(--surface, rgba(0, 0, 0, 0.2));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 4rem;
+  font-size: 3.5rem;
   overflow: hidden;
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .cover-image {
@@ -91,12 +94,18 @@ onMounted(() => store.load())
 }
 
 .info {
-  padding: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.info h3 {
+  font-size: 1rem;
+  margin: 0 0 0.25rem;
 }
 
 .max-price {
   color: var(--warning);
-  font-weight: bold;
+  font-weight: 700;
+  font-family: var(--font-data);
   margin-top: 0.5rem;
 }
 

@@ -649,18 +649,21 @@ onMounted(async () => {
 /* ── Table ── */
 .table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 .price-table {
   width: 100%;
+  min-width: 540px;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
 
 .price-table thead th {
-  background: rgba(0,0,0,0.2);
+  background: var(--surface-subtle);
   padding: 0.75rem 1rem;
   text-align: left;
   font-weight: 600;
@@ -744,13 +747,16 @@ onMounted(async () => {
 }
 
 .price {
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-data);
   color: var(--primary);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .na-value {
   color: var(--text-muted);
+  font-family: var(--font-data);
+  font-size: 0.82rem;
+  opacity: 0.55;
 }
 
 /* ── Pagination ── */
