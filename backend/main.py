@@ -1,5 +1,6 @@
 import os
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -27,7 +28,17 @@ from .price_tracker import router as price_router
 from .scheduler import init_scheduler, shutdown_scheduler
 
 
-app = FastAPI(title="Collectabase", version=APP_VERSION)
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    init_scheduler()
+    try:
+        yield
+    finally:
+        shutdown_scheduler()
+
+
+app = FastAPI(title="Collectabase", version=APP_VERSION, lifespan=lifespan)
 _startup_time = time.time()
 app.include_router(games_router)
 app.include_router(backups_router)
@@ -53,16 +64,6 @@ if os.path.isdir(CONSOLE_FALLBACKS_DIR):
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
-
-
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-    init_scheduler()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    shutdown_scheduler()
 
 
 @app.get("/api/health")

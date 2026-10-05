@@ -25,6 +25,16 @@ class TestDeploymentConfig(unittest.TestCase):
         self.assertIn("target: /app/uploads", compose)
         self.assertIn("target: /app/backups", compose)
 
+    def test_runtime_uses_ci_node_version_and_lifespan(self):
+        root = Path(__file__).resolve().parents[2]
+        dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+        main = (root / "backend" / "main.py").read_text(encoding="utf-8")
+
+        self.assertIn("FROM node:20-alpine", dockerfile)
+        self.assertIn("RUN npm ci", dockerfile)
+        self.assertIn("lifespan=lifespan", main)
+        self.assertNotIn("@app.on_event", main)
+
 
 class TestDatabaseConfiguration(unittest.TestCase):
     def test_database_url_environment_override_is_used_outside_docker(self):
