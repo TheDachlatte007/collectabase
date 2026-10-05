@@ -45,3 +45,6 @@ Examples:
 Notes:
 - Local images are preferred over remote URLs.
 - If no local image exists for a slug, the previous remote fallback is used.
+- To create a reviewable, smaller WebP copy without modifying this gallery, run:
+  `python scripts/optimize_console_fallbacks.py --source backend/static/console-fallbacks --output backend/static/console-fallbacks-webp --check`
+- Remove `--check` only after reviewing the planned files. Keep the output folder separate until its images have been visually checked.
