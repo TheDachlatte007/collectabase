@@ -10,17 +10,21 @@ export function defaultUiPrefs() {
   }
 }
 
-export function loadUiPrefs() {
+function normalizeUiPrefs(prefs) {
   const defaults = defaultUiPrefs()
+  return {
+    theme: THEME_OPTIONS.includes(prefs?.theme) ? prefs.theme : defaults.theme,
+    density: DENSITY_OPTIONS.includes(prefs?.density) ? prefs.density : defaults.density,
+  }
+}
+
+export function loadUiPrefs() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return defaults
-    const parsed = JSON.parse(raw)
-    const theme = THEME_OPTIONS.includes(parsed?.theme) ? parsed.theme : defaults.theme
-    const density = DENSITY_OPTIONS.includes(parsed?.density) ? parsed.density : defaults.density
-    return { theme, density }
+    if (!raw) return defaultUiPrefs()
+    return normalizeUiPrefs(JSON.parse(raw))
   } catch {
-    return defaults
+    return defaultUiPrefs()
   }
 }
 
@@ -36,10 +40,7 @@ export function saveUiPrefs(prefs) {
 }
 
 export function setUiPrefs(next) {
-  const prefs = {
-    ...defaultUiPrefs(),
-    ...next
-  }
+  const prefs = normalizeUiPrefs(next)
   applyUiPrefs(prefs)
   saveUiPrefs(prefs)
   return prefs

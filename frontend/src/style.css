@@ -14,15 +14,18 @@
   --primary-soft: rgba(170, 135, 255, 0.14);
   --secondary: #df8dad;
   --accent-tertiary: #68bdd9;
-  --bg: #121116;
-  --bg-light: rgba(29, 28, 35, 0.9);
-  --bg-lighter: rgba(47, 45, 55, 0.96);
-  --sidebar-bg: rgba(22, 21, 27, 0.96);
-  --nav-bg: rgba(22, 21, 27, 0.94);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-border-hover: rgba(255, 255, 255, 0.2);
-  --glass-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
-  --card-blur: blur(12px);
+  --bg: #101118;
+  --bg-light: #191b25;
+  --bg-lighter: #232633;
+  --sidebar-bg: #151720;
+  --nav-bg: #151720;
+  --surface: #191b25;
+  --surface-raised: #232633;
+  --surface-subtle: #141620;
+  --glass-border: rgba(203, 213, 225, 0.12);
+  --glass-border-hover: rgba(203, 213, 225, 0.26);
+  --glass-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+  --card-blur: none;
 
   --text: #f8fafc;
   --text-muted: #94a3b8;
@@ -30,6 +33,9 @@
   --success: #10b981;
   --warning: #f59e0b;
   --error: #ef4444;
+  --info: #68bdd9;
+  --focus-ring: #a9c6ff;
+  --font-data: ui-monospace, SFMono-Regular, Consolas, monospace;
 
   --container-padding: 2rem;
   --btn-padding-y: 0.65rem;
@@ -48,10 +54,10 @@
   --secondary: #d7b46d;
   --accent-tertiary: #63bfd0;
   --bg: #101714;
-  --bg-light: rgba(25, 37, 31, 0.91);
-  --bg-lighter: rgba(42, 58, 49, 0.96);
-  --sidebar-bg: rgba(19, 29, 24, 0.97);
-  --nav-bg: rgba(19, 29, 24, 0.95);
+  --bg-light: #19251f;
+  --bg-lighter: #2a3a31;
+  --sidebar-bg: #131d18;
+  --nav-bg: #131d18;
 }
 
 :root[data-theme='sunset'] {
@@ -61,10 +67,10 @@
   --secondary: #d46f66;
   --accent-tertiary: #d9b464;
   --bg: #191310;
-  --bg-light: rgba(42, 31, 25, 0.91);
-  --bg-lighter: rgba(66, 46, 35, 0.97);
-  --sidebar-bg: rgba(32, 23, 18, 0.97);
-  --nav-bg: rgba(32, 23, 18, 0.95);
+  --bg-light: #2a1f19;
+  --bg-lighter: #422e23;
+  --sidebar-bg: #201712;
+  --nav-bg: #201712;
 }
 
 :root[data-theme='ocean'] {
@@ -74,10 +80,10 @@
   --secondary: #79c8ac;
   --accent-tertiary: #8da9da;
   --bg: #10171a;
-  --bg-light: rgba(24, 37, 41, 0.91);
-  --bg-lighter: rgba(39, 58, 64, 0.97);
-  --sidebar-bg: rgba(18, 29, 33, 0.97);
-  --nav-bg: rgba(18, 29, 33, 0.95);
+  --bg-light: #182529;
+  --bg-lighter: #273a40;
+  --sidebar-bg: #121d21;
+  --nav-bg: #121d21;
 }
 
 :root[data-theme='rose'] {
@@ -87,10 +93,10 @@
   --secondary: #d59c72;
   --accent-tertiary: #c791af;
   --bg: #191114;
-  --bg-light: rgba(42, 27, 32, 0.91);
-  --bg-lighter: rgba(65, 41, 49, 0.97);
-  --sidebar-bg: rgba(32, 20, 24, 0.97);
-  --nav-bg: rgba(32, 20, 24, 0.95);
+  --bg-light: #2a1b20;
+  --bg-lighter: #412931;
+  --sidebar-bg: #201418;
+  --nav-bg: #201418;
 }
 
 :root[data-theme='slate'] {
@@ -100,10 +106,10 @@
   --secondary: #84a8a4;
   --accent-tertiary: #92a7c6;
   --bg: #15171a;
-  --bg-light: rgba(29, 32, 36, 0.92);
-  --bg-lighter: rgba(46, 51, 58, 0.97);
-  --sidebar-bg: rgba(22, 25, 29, 0.97);
-  --nav-bg: rgba(22, 25, 29, 0.95);
+  --bg-light: #1d2024;
+  --bg-lighter: #2e333a;
+  --sidebar-bg: #16191d;
+  --nav-bg: #16191d;
 }
 
 :root[data-density='compact'] {
@@ -119,10 +125,11 @@
 body {
   font-family: var(--font-body);
   background-color: var(--bg);
-  background-image: 
-    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 34%),
-    radial-gradient(ellipse at 92% 100%, color-mix(in srgb, var(--secondary) 10%, transparent), transparent 36%),
-    linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.015) 48%, transparent 100%);
+  background-image:
+    linear-gradient(rgba(203, 213, 225, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(203, 213, 225, 0.018) 1px, transparent 1px),
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 34%);
+  background-size: 28px 28px, 28px 28px, auto;
   background-attachment: fixed;
   color: var(--text);
   line-height: 1.6;
@@ -133,6 +140,11 @@ body {
 ::selection {
   color: var(--bg);
   background: var(--primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 h1, h2, h3 {
