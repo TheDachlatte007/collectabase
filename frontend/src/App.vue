@@ -17,16 +17,16 @@
 
       <nav class="sidebar-nav">
         <router-link to="/" active-class="" exact-active-class="active" title="My Collection">
-          <span class="nav-icon">📚</span> <span v-show="!collapsed">My Collection</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-8h6v8"/></svg> <span v-show="!collapsed">My Collection</span>
         </router-link>
         <router-link to="/stats" title="Stats">
-          <span class="nav-icon">📈</span> <span v-show="!collapsed">Stats</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> <span v-show="!collapsed">Stats</span>
         </router-link>
         <router-link to="/prices" title="Prices Browser">
-          <span class="nav-icon">💰</span> <span v-show="!collapsed">Prices</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 12.5 12.5 20a2.1 2.1 0 0 1-3 0L2 12.5V3h9.5L20 11a2.1 2.1 0 0 1 0 1.5Z"/><circle cx="7" cy="8" r="1"/></svg> <span v-show="!collapsed">Prices</span>
         </router-link>
         <router-link to="/more" title="More Options">
-          <span class="nav-icon">⚙️</span> <span v-show="!collapsed">More</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg> <span v-show="!collapsed">More</span>
         </router-link>
       </nav>
 
