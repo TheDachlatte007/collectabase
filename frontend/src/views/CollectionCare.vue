@@ -35,7 +35,7 @@
         <div class="care-toolbar">
           <div>
             <p class="care-kicker">{{ activeGroup.label }}</p>
-            <h2>{{ filteredItems.length }} {{ filteredItems.length === 1 ? 'item' : 'items' }} to review</h2>
+            <h2><span class="care-count">{{ filteredItems.length }}</span> {{ filteredItems.length === 1 ? 'item' : 'items' }} to review</h2>
           </div>
           <input v-model.trim="search" class="care-search" type="search" placeholder="Search this list..." />
         </div>
@@ -198,10 +198,10 @@ onMounted(() => store.load())
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.45rem 0.65rem;
-  padding: 0.9rem;
+  padding: 0.85rem;
   color: var(--text);
   text-align: left;
-  background: var(--bg-light);
+  background: var(--surface);
   border: 1px solid var(--glass-border);
   border-radius: 0.75rem;
   cursor: pointer;
@@ -211,7 +211,7 @@ onMounted(() => store.load())
 .care-summary:hover,
 .care-summary.active {
   border-color: color-mix(in srgb, var(--primary) 55%, transparent);
-  background: color-mix(in srgb, var(--bg-light) 88%, var(--primary));
+  background: var(--surface-raised);
 }
 
 .summary-icon {
@@ -226,8 +226,9 @@ onMounted(() => store.load())
 }
 
 .summary-copy { display: grid; gap: 0.05rem; font-size: 0.82rem; color: var(--text-muted); }
-.summary-copy strong { color: var(--text); font-size: 1.35rem; line-height: 1; }
+.summary-copy strong { color: var(--text); font-size: 1.35rem; line-height: 1; font-family: var(--font-data); }
 .summary-note { grid-column: 1 / -1; color: var(--text-muted); font-size: 0.72rem; }
+.care-count { font-family: var(--font-data); }
 
 .care-panel { display: grid; gap: 1rem; }
 .care-search { width: min(100%, 260px); }
@@ -250,7 +251,7 @@ onMounted(() => store.load())
   overflow: hidden;
   border: 1px solid var(--glass-border);
   border-radius: 0.5rem;
-  background: var(--bg);
+  background: var(--surface-subtle);
   font-size: 1.45rem;
 }
 

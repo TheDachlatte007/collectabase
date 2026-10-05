@@ -57,6 +57,7 @@
           <img
             v-if="coverSrc(game)"
             :src="coverSrc(game)"
+            :alt="`${game.title} cover`"
             class="cover-image"
             @error="markBroken(game.id)"
           />
@@ -302,31 +303,31 @@ onMounted(() => store.load())
 }
 
 .game-card {
-  background: var(--bg-light);
-  border-radius: 1rem;
+  background: var(--surface);
+  border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid var(--glass-border);
   position: relative;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
-  backdrop-filter: var(--card-blur);
-  -webkit-backdrop-filter: var(--card-blur);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
   box-shadow: var(--glass-shadow);
 }
 
 .game-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 40px 0 rgba(0, 0, 0, 0.5);
+  transform: translateY(-3px);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
   border-color: var(--glass-border-hover);
 }
 
 .cover {
   aspect-ratio: 3/4;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.4));
+  background: var(--surface-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 4rem;
+  font-size: 3.5rem;
   overflow: hidden;
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .cover-image {
@@ -337,12 +338,12 @@ onMounted(() => store.load())
 }
 
 .info {
-  padding: 1rem;
+  padding: 0.85rem 1rem 1rem;
 }
 
 .info h3 {
-  font-size: 1rem;
-  margin-bottom: 0.25rem;
+  font-size: 0.98rem;
+  margin-bottom: 0.2rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -350,22 +351,25 @@ onMounted(() => store.load())
 
 .meta {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
   flex-wrap: wrap;
 }
 
 .badge {
-  background: var(--bg);
-  padding: 0.25rem 0.5rem;
+  background: var(--surface-subtle);
+  padding: 0.18rem 0.45rem;
   border-radius: 0.25rem;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
+  border: 1px solid var(--glass-border);
 }
 
 .value {
   color: var(--success);
-  font-weight: bold;
+  font-weight: 700;
+  font-family: var(--font-data);
+  font-size: 0.95rem;
   margin-top: 0.5rem;
 }
 
@@ -375,8 +379,10 @@ onMounted(() => store.load())
 }
 
 .type-badge {
-  background: var(--primary, #6366f1);
-  color: white;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  font-weight: 600;
 }
 
 </style>

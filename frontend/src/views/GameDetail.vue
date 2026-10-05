@@ -97,15 +97,38 @@
           </div>
           <div class="actions actions-compact actions-toolbar">
             <router-link :to="`/edit/${game.id}`" class="btn btn-primary btn-compact">Edit</router-link>
-            <details class="more-menu">
-              <summary class="btn btn-secondary btn-compact more-trigger" aria-label="More actions" title="More actions">⋮</summary>
+            <details ref="detailMoreMenu" class="more-menu">
+              <summary class="btn btn-secondary btn-compact more-trigger" aria-label="More actions" title="More actions">
+                <span>More</span>
+                <span class="more-caret" aria-hidden="true">▾</span>
+              </summary>
               <div class="more-menu-list">
-                <button type="button" class="more-menu-link more-menu-btn" @click="openPriceBrowserSearch">🔎 Open in Price Browser</button>
-                <a :href="ebayUrl()" target="_blank" rel="noopener" class="more-menu-link">🛒 eBay Sold Items</a>
-                <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="more-menu-link">📈 PriceCharting Page</a>
-                <a :href="rawgUrl()" target="_blank" rel="noopener" class="more-menu-link">🎮 RAWG Database</a>
+                <button type="button" class="more-menu-link more-menu-btn" @click="openPriceBrowserSearch(); closeDetailMoreMenu()">
+                  <span>🔎</span> <span>Open in Price Browser</span>
+                </button>
+                <button type="button" class="more-menu-link more-menu-btn" @click="enrichCover(); closeDetailMoreMenu()" :disabled="enriching">
+                  <span>🪄</span> <span>{{ enriching ? 'Fetching Cover...' : 'Auto-Fetch Cover' }}</span>
+                </button>
+                <button type="button" class="more-menu-link more-menu-btn" @click="triggerCoverUpload(); closeDetailMoreMenu()" :disabled="coverUploading">
+                  <span>📷</span> <span>Upload Cover Photo</span>
+                </button>
+                <button type="button" class="more-menu-link more-menu-btn" @click="openCoverGallery(); closeDetailMoreMenu()" :disabled="coverUploading">
+                  <span>🖼</span> <span>Choose from Gallery</span>
+                </button>
                 <hr class="more-menu-divider" />
-                <button type="button" class="more-menu-link more-menu-btn text-danger" @click="deleteGame">🗑 Delete Game</button>
+                <a :href="ebayUrl()" target="_blank" rel="noopener" class="more-menu-link" @click="closeDetailMoreMenu">
+                  <span>🛒</span> <span>eBay Sold Items</span>
+                </a>
+                <a :href="priceChartingUrl()" target="_blank" rel="noopener" class="more-menu-link" @click="closeDetailMoreMenu">
+                  <span>📈</span> <span>PriceCharting Page</span>
+                </a>
+                <a :href="rawgUrl()" target="_blank" rel="noopener" class="more-menu-link" @click="closeDetailMoreMenu">
+                  <span>🎮</span> <span>RAWG Database</span>
+                </a>
+                <hr class="more-menu-divider" />
+                <button type="button" class="more-menu-link more-menu-btn text-danger" @click="deleteGame(); closeDetailMoreMenu()">
+                  <span>🗑</span> <span>Delete Game</span>
+                </button>
               </div>
             </details>
           </div>
@@ -439,7 +462,14 @@ const priceChartEl = ref(null)
 const coverFileInput = ref(null)
 const galleryFileInput = ref(null)
 const coverUploadMenu = ref(null)
+const detailMoreMenu = ref(null)
 const coverUploading = ref(false)
+
+function closeDetailMoreMenu() {
+  if (detailMoreMenu.value) {
+    detailMoreMenu.value.open = false
+  }
+}
 const galleryUploading = ref(false)
 const coverUploadError = ref('')
 const placeholderApplying = ref(false)
@@ -1403,10 +1433,12 @@ onMounted(async () => {
   right: 1rem;
   background: var(--success);
   color: white;
-  padding: 0.5rem 1rem;
+  padding: 0.45rem 0.9rem;
   border-radius: 0.5rem;
-  font-weight: bold;
+  font-weight: 700;
+  font-family: var(--font-data);
   font-size: 1.25rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .actions {
@@ -1467,39 +1499,65 @@ onMounted(async () => {
 }
 
 .more-trigger {
-  min-width: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
   justify-content: center;
-  font-size: 0.9rem !important;
-  padding-inline: 0.35rem !important;
+  font-size: 0.76rem !important;
+  font-weight: 600;
+  padding-inline: 0.65rem !important;
+  cursor: pointer;
+}
+
+.more-caret {
+  font-size: 0.65rem;
+  opacity: 0.8;
+  transition: transform 0.18s ease;
+}
+
+.more-menu[open] .more-caret {
+  transform: rotate(180deg);
 }
 
 .more-menu-list {
   position: absolute;
   right: 0;
   top: calc(100% + 0.35rem);
-  min-width: 190px;
-  background: var(--bg-light);
-  border: 1px solid var(--border);
+  min-width: 210px;
+  background: var(--surface-raised);
+  border: 1px solid var(--glass-border);
   border-radius: 0.5rem;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
-  padding: 0.3rem;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  padding: 0.35rem;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
   z-index: 25;
-  max-width: min(88vw, 280px);
+  max-width: min(88vw, 290px);
 }
 
 .more-menu-link {
   color: var(--text);
   text-decoration: none;
   font-size: 0.78rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.42rem 0.55rem;
   border-radius: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .more-menu-link:hover {
-  background: var(--bg-lighter);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.more-menu-divider {
+  border: none;
+  border-top: 1px solid var(--glass-border);
+  margin: 0.25rem 0;
 }
 
 .more-menu-btn {
@@ -1599,12 +1657,10 @@ onMounted(async () => {
 }
 
 .chunk-card {
-  background: var(--bg-light);
+  background: var(--surface);
   border: 1px solid var(--glass-border);
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   padding: 1.25rem;
-  backdrop-filter: var(--card-blur);
-  -webkit-backdrop-filter: var(--card-blur);
   box-shadow: var(--glass-shadow);
 }
 
@@ -1667,6 +1723,7 @@ onMounted(async () => {
   padding: 0.35rem 0.85rem;
   border-radius: 2rem;
   font-weight: 700;
+  font-family: var(--font-data);
   margin-top: 0.25rem;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -1787,7 +1844,8 @@ onMounted(async () => {
 
 .p-val {
   font-size: 1.4rem;
-  font-weight: bold;
+  font-weight: 700;
+  font-family: var(--font-data);
 }
 
 .price-cell.relevant .p-val {
