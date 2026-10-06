@@ -57,7 +57,7 @@ class TestDatabaseConfiguration(unittest.TestCase):
 
 class PlatformCatalogTests(unittest.TestCase):
     def test_known_aliases_and_unknown_platforms_have_stable_identities(self):
-        from backend.services.price.platforms import canonicalize_platform
+        from backend.services.price.platforms import canonicalize_platform, get_known_platforms
 
         self.assertEqual(canonicalize_platform("PlayStation").key, "playstation")
         self.assertEqual(canonicalize_platform("playstation").label, "PlayStation")
@@ -68,6 +68,11 @@ class PlatformCatalogTests(unittest.TestCase):
         unknown = canonicalize_platform("Arcade Cabinet")
         self.assertEqual(unknown.key, "arcade-cabinet")
         self.assertEqual(unknown.label, "Arcade Cabinet")
+
+        known = get_known_platforms()
+        self.assertTrue(len(known) > 10)
+        self.assertTrue(any(p.key == "playstation-5" for p in known))
+        self.assertTrue(any(p.scraper_slug == "nintendo-switch" for p in known))
 
 
 class ApiSmokeTest(unittest.TestCase):
@@ -245,6 +250,22 @@ class ApiSmokeTest(unittest.TestCase):
 
         self.client.delete(f"/api/games/{gid}")
         self.client.delete(f"/api/games/{wid}")
+
+    def test_price_catalog_platforms_endpoint(self):
+        r = self.client.get("/api/price-catalog/platforms")
+        self.assertEqual(r.status_code, 200)
+        platforms = r.json()
+        self.assertTrue(isinstance(platforms, list))
+        self.assertTrue(len(platforms) > 0)
+        first = platforms[0]
+        self.assertIn("key", first)
+        self.assertIn("label", first)
+        self.assertIn("scraper_slug", first)
+        self.assertIn("count", first)
+        # Check that canonical keys exist
+        keys = [p["key"] for p in platforms]
+        self.assertIn("playstation-5", keys)
+        self.assertIn("nintendo-switch", keys)
 
     def test_lookup_barcode_rejects_invalid_code(self):
         r = self.client.post("/api/lookup/barcode", json={"barcode": "123"})

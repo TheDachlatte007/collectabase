@@ -44,7 +44,16 @@ _PLATFORMS = {
     "sega master system": PlatformIdentity("sega-master-system", "Sega Master System", "sega-master-system"),
     "sega game gear": PlatformIdentity("sega-game-gear", "Sega Game Gear", "game-gear"),
 }
-_ALIASES = {"ps5": "playstation 5", "ps4": "playstation 4", "ps3": "playstation 3", "ps2": "playstation 2"}
+_ALIASES = {
+    "ps5": "playstation 5",
+    "ps4": "playstation 4",
+    "ps3": "playstation 3",
+    "ps2": "playstation 2",
+    "xbox series x": "xbox series x s",
+    "super nintendo": "snes",
+    "genesis": "sega genesis mega drive",
+    "mega drive": "sega genesis mega drive",
+}
 PLATFORM_SLUGS = {identity.label.lower(): identity.scraper_slug for identity in _PLATFORMS.values() if identity.scraper_slug}
 
 
@@ -60,3 +69,11 @@ def canonicalize_platform(value: str | None) -> PlatformIdentity:
     key = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-") or "unknown"
     label = " ".join(word.capitalize() for word in normalized.split()) or "Unknown"
     return PlatformIdentity(key, label)
+
+
+def get_known_platforms() -> list[PlatformIdentity]:
+    seen: dict[str, PlatformIdentity] = {}
+    for identity in _PLATFORMS.values():
+        if identity.key not in seen:
+            seen[identity.key] = identity
+    return sorted(seen.values(), key=lambda p: p.label.lower())

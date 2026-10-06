@@ -12,7 +12,9 @@
         />
         <select v-model="selectedPlatform" class="filter-select" @change="loadPage(1)">
           <option value="">All Platforms</option>
-          <option v-for="p in platforms" :key="p" :value="p">{{ p }}</option>
+          <option v-for="p in platforms" :key="p.key || p" :value="p.key || p">
+            {{ p.label || p }}<template v-if="p.count > 0"> ({{ p.count.toLocaleString() }})</template>
+          </option>
         </select>
         <select v-model="sortField" class="filter-select" @change="loadPage(1)">
           <option value="title">Sort: Title</option>
@@ -35,8 +37,8 @@
       <div class="scrape-controls">
         <select v-model="scrapeTarget" class="filter-select scrape-select">
           <option value="all">All Platforms</option>
-          <option v-for="[label, slug] in platformSlugs" :key="slug" :value="slug">
-            {{ label }}
+          <option v-for="p in scrapePlatforms" :key="p.key" :value="p.scraper_slug || p.key">
+            {{ p.label }}
           </option>
         </select>
         <button class="btn btn-secondary" :disabled="scraping" @click="startScrape">
@@ -86,7 +88,8 @@
 	      </span>
     </div>
     <div v-if="selectedPlatform" class="filter-notice mb-3">
-      Filter active: showing only platform "{{ selectedPlatform }}"
+      Filter active: showing only platform "{{ selectedPlatformLabel }}"
+      <button class="btn-reset-filter" @click="clearPlatformFilter">Reset</button>
     </div>
 
     <div v-if="loading" class="loading">Loading catalog…</div>
@@ -232,39 +235,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { priceApi, priceCatalogApi, gamesApi, platformsApi } from '../api'
 import { notifyError, notifySuccess } from '../composables/useNotifications'
 
-// Known platform slug mapping (mirrors backend PLATFORM_SLUGS)
-const platformSlugs = [
-  ['PlayStation 5', 'playstation-5'],
-  ['PlayStation 4', 'playstation-4'],
-  ['PlayStation 3', 'playstation-3'],
-  ['PlayStation 2', 'playstation-2'],
-  ['PlayStation', 'playstation'],
-  ['PSP', 'psp'],
-  ['PS Vita', 'ps-vita'],
-  ['Xbox Series X/S', 'xbox-series-x'],
-  ['Xbox One', 'xbox-one'],
-  ['Xbox 360', 'xbox-360'],
-  ['Xbox', 'xbox'],
-  ['Nintendo Switch', 'nintendo-switch'],
-  ['Nintendo Switch 2', 'nintendo-switch-2'],
-  ['Wii U', 'wii-u'],
-  ['Wii', 'wii'],
-  ['GameCube', 'gamecube'],
-  ['Nintendo 64', 'nintendo-64'],
-  ['SNES', 'super-nintendo'],
-  ['NES', 'nes'],
-  ['Game Boy Advance', 'gameboy-advance'],
-  ['Game Boy Color', 'gameboy-color'],
-  ['Game Boy', 'gameboy'],
-  ['Nintendo 3DS', '3ds'],
-  ['Nintendo DS', 'nintendo-ds'],
-  ['Sega Dreamcast', 'sega-dreamcast'],
-  ['Sega Saturn', 'sega-saturn'],
-  ['Sega Genesis/Mega Drive', 'sega-genesis'],
-  ['Sega Master System', 'sega-master-system'],
-  ['Sega Game Gear', 'game-gear'],
-]
-
 const items = ref([])
 const platforms = ref([])
 const total = ref(0)
@@ -281,6 +251,7 @@ const scraping = ref(false)
 const enrichingLibrary = ref(false)
 const scrapeTarget = ref('all')
 const scrapeResult = ref(null)
+const lastScraped = ref('')
 const linkedGameId = ref(null)
 const applyLoadingId = ref(null)
 const libraryMarkers = ref(new Set()) // Combined "Title|Platform" keys
@@ -290,6 +261,26 @@ const router = useRouter()
 let searchTimer = null
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit)))
+
+const scrapePlatforms = computed(() => {
+  return platforms.value.filter(p => !!p.scraper_slug)
+})
+
+const selectedPlatformLabel = computed(() => {
+  if (!selectedPlatform.value) return ''
+  const val = String(selectedPlatform.value).toLowerCase()
+  const found = platforms.value.find(p => {
+    const k = String(p.key || '').toLowerCase()
+    const l = String(p.label || '').toLowerCase()
+    return k === val || l === val
+  })
+  return found ? (found.label || found) : selectedPlatform.value
+})
+
+function clearPlatformFilter() {
+  selectedPlatform.value = ''
+  loadPage(1)
+}
 
 function buildParams() {
   const p = new URLSearchParams()
@@ -329,14 +320,32 @@ async function loadPlatforms() {
   }
 }
 
+function normalizePlatformName(name) {
+  if (!name) return ''
+  const clean = String(name).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const aliases = {
+    ps5: 'playstation 5',
+    ps4: 'playstation 4',
+    ps3: 'playstation 3',
+    ps2: 'playstation 2',
+    'xbox series x': 'xbox series x s',
+    'super nintendo': 'snes',
+    genesis: 'sega genesis mega drive',
+    'mega drive': 'sega genesis mega drive',
+  }
+  return aliases[clean] || clean
+}
+
 async function loadLibraryMarkers() {
   try {
     const res = await gamesApi.list()
     if (res.ok && Array.isArray(res.data)) {
       const markers = new Set()
       res.data.forEach(g => {
-        const key = `${String(g.title).toLowerCase()}|${String(g.platform_name).toLowerCase()}`
-        markers.add(key)
+        const titleKey = String(g.title).toLowerCase().trim()
+        const platKey = normalizePlatformName(g.platform_name)
+        markers.add(`${titleKey}|${platKey}`)
+        markers.add(`${titleKey}|${String(g.platform_name).toLowerCase().trim()}`)
       })
       libraryMarkers.value = markers
     }
@@ -346,8 +355,10 @@ async function loadLibraryMarkers() {
 }
 
 function isInCollection(item) {
-  const key = `${String(item.title).toLowerCase()}|${String(item.platform).toLowerCase()}`
-  return libraryMarkers.value.has(key)
+  const titleKey = String(item.title).toLowerCase().trim()
+  const platKey = normalizePlatformName(item.platform)
+  return libraryMarkers.value.has(`${titleKey}|${platKey}`) ||
+         libraryMarkers.value.has(`${titleKey}|${String(item.platform).toLowerCase().trim()}`)
 }
 
 function onSearchInput() {
@@ -428,8 +439,8 @@ async function clearCatalog() {
   await priceCatalogApi.clear()
   items.value = []
   total.value = 0
-  platforms.value = []
   scrapeResult.value = null
+  await loadPlatforms()
 }
 
 async function applyToLinkedGame(item) {
@@ -492,9 +503,11 @@ async function confirmAdd() {
   if (!item) return
 
   // Find matching platform_id from backend platforms list
-  const platformMatch = backendPlatforms.value.find(
-    p => p.name.toLowerCase() === item.platform.toLowerCase()
-  )
+  const itemNorm = normalizePlatformName(item.platform)
+  const platformMatch = backendPlatforms.value.find(p => {
+    return p.name.toLowerCase() === item.platform.toLowerCase() ||
+           normalizePlatformName(p.name) === itemNorm
+  })
 
   if (!platformMatch) {
     addModal.value.error = `Platform "${item.platform}" not found in your platform list.`
@@ -541,8 +554,13 @@ onMounted(async () => {
   await loadPlatforms()
   await loadLibraryMarkers()
   if (routePlatform) {
-    const matched = platforms.value.find(p => String(p).toLowerCase() === routePlatform.toLowerCase())
-    selectedPlatform.value = matched || routePlatform
+    const target = routePlatform.toLowerCase()
+    const matched = platforms.value.find(p => {
+      const k = String(p.key || '').toLowerCase()
+      const l = String(p.label || '').toLowerCase()
+      return k === target || l === target
+    })
+    selectedPlatform.value = matched ? matched.key : routePlatform
   }
   await loadPage(1)
   try {
@@ -635,6 +653,25 @@ onMounted(async () => {
 .filter-notice {
   font-size: 0.85rem;
   color: #fbbf24;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-reset-filter {
+  background: transparent;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fbbf24;
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-reset-filter:hover {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: #fbbf24;
 }
 
 .link-notice {

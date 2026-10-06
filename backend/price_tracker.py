@@ -17,7 +17,7 @@ from .services.price.catalog import (
     _lookup_local_catalog_price, scrape_platform_catalog,
     _upsert_catalog_entries, _derive_platform_label
 )
-from .services.price.platforms import canonicalize_platform
+from .services.price.platforms import canonicalize_platform, get_known_platforms
 from .services.price.providers.ebay import fetch_ebay_market_price, _ebay_credentials
 from .services.price.providers.rawg import fetch_rawg_reference, _rawg_key
 from .services.price.providers.pricecharting import (
@@ -409,6 +409,18 @@ async def apply_catalog_price(game_id: int, payload: CatalogPriceApply):
     }
 
 
+def _resolve_scraper_target(platform: str) -> tuple[str, str] | None:
+    if not platform or platform == "all":
+        return None
+    for lbl, slug in PLATFORM_SLUGS.items():
+        if slug == platform or lbl == platform.lower():
+            return (lbl, slug)
+    identity = canonicalize_platform(platform)
+    if identity.scraper_slug:
+        return (identity.label, identity.scraper_slug)
+    return None
+
+
 @router.post("/api/price-catalog/scrape")
 async def scrape_catalog(
     platform: str = "all",
@@ -420,12 +432,10 @@ async def scrape_catalog(
     if query:
         platform_hint = None
         if platform and platform != "all":
-            platform_hint = next(
-                (lbl for lbl, slug in PLATFORM_SLUGS.items() if slug == platform or lbl == platform),
-                None,
-            )
-            if not platform_hint:
+            resolved = _resolve_scraper_target(platform)
+            if not resolved:
                 raise HTTPException(status_code=400, detail=f"Unknown platform: {platform}")
+            platform_hint = resolved[0]
 
         scraped = await _fetch_pricecharting_scrape(query, platform_hint or "")
         if not scraped:
@@ -474,14 +484,10 @@ async def scrape_catalog(
     if platform == "all":
         targets = list(PLATFORM_SLUGS.items())
     else:
-        # Accept either a slug (e.g. "nintendo-switch") or a label
-        label = next(
-            (lbl for lbl, slug in PLATFORM_SLUGS.items() if slug == platform or lbl == platform),
-            None,
-        )
-        if not label:
+        resolved = _resolve_scraper_target(platform)
+        if not resolved:
             raise HTTPException(status_code=400, detail=f"Unknown platform: {platform}")
-        targets = [(label, PLATFORM_SLUGS[label])]
+        targets = [resolved]
 
     eur_rate = await get_eur_rate()
     total_scraped = 0
@@ -679,12 +685,49 @@ async def search_catalog(
 
 @router.get("/api/price-catalog/platforms")
 async def catalog_platforms():
-    """Return distinct platforms present in the price catalog."""
+    """Return distinct platforms present in the price catalog with canonical keys and labels."""
     with get_db() as db:
         rows = db.execute(
-            "SELECT DISTINCT platform FROM price_catalog ORDER BY platform"
+            """
+            SELECT platform, platform_key, COUNT(*) as count
+            FROM price_catalog
+            WHERE platform IS NOT NULL AND platform != ''
+            GROUP BY platform, platform_key
+            ORDER BY platform
+            """
         ).fetchall()
-    return [r["platform"] for r in rows]
+
+    catalog_counts = {}
+    catalog_platforms_dict = {}
+    for r in rows:
+        identity = canonicalize_platform(r["platform_key"] or r["platform"])
+        catalog_counts[identity.key] = catalog_counts.get(identity.key, 0) + (r["count"] or 0)
+        catalog_platforms_dict[identity.key] = identity
+
+    results = []
+    known = get_known_platforms()
+    seen_keys = set()
+    for kp in known:
+        seen_keys.add(kp.key)
+        results.append({
+            "key": kp.key,
+            "label": kp.label,
+            "scraper_slug": kp.scraper_slug,
+            "count": catalog_counts.get(kp.key, 0),
+        })
+
+    for key, identity in catalog_platforms_dict.items():
+        if key not in seen_keys:
+            seen_keys.add(key)
+            results.append({
+                "key": identity.key,
+                "label": identity.label,
+                "scraper_slug": identity.scraper_slug,
+                "count": catalog_counts.get(key, 0),
+            })
+
+    results.sort(key=lambda x: x["label"].lower())
+    return results
 
 
 @router.delete("/api/price-catalog")

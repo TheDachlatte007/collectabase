@@ -37,21 +37,21 @@
 
 **Interfaces:** `canonicalize_platform(value: str | None) -> PlatformIdentity` returns `key`, `label`, and `scraper_slug`. `platform_filter_values(value: str) -> tuple[str, str]` accepts a display label or key.
 
-- [ ] **Step 1: Write normalization tests**
+- [x] **Step 1: Write normalization tests**
 
 Add tests for `PlayStation`, `playstation`, `PS5`, `Nintendo Switch`, `nintendo switch`, `Xbox One`, and an unknown input. Assert stable key, expected label, and no empty key.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `python -m unittest backend.tests.test_api_smoke.PlatformCatalogTests -v`
 
 Expected: FAIL because the module does not exist.
 
-- [ ] **Step 3: Implement `PlatformIdentity` and alias table**
+- [x] **Step 3: Implement `PlatformIdentity` and alias table**
 
 Move current `PLATFORM_SLUGS` ownership into the module. Include every existing scrape label and a deterministic slugified fallback. Update price tracker and scraper entry creation to use the module rather than local maps.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `python -m unittest backend.tests.test_api_smoke.PlatformCatalogTests -v`
 
@@ -71,21 +71,21 @@ git commit -m "feat: centralize catalog platform identities"
 
 **Interfaces:** `price_catalog.platform_key` is indexed. `GET /api/price-catalog` accepts canonical `platform_key` and legacy `platform`. `GET /api/price-catalog/platforms` returns display labels and keys.
 
-- [ ] **Step 1: Write migration fixture tests**
+- [x] **Step 1: Write migration fixture tests**
 
 Seed `PlayStation`, `playstation`, and an unknown label. Run Alembic to head and assert canonical labels/keys, no unsafe blank-ID merge, and an index on `platform_key`. Exercise searches with label and key.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `python -m unittest backend.tests.test_api_smoke.PriceCatalogMigrationTests -v`
 
 Expected: FAIL because `platform_key` and canonical filtering do not exist.
 
-- [ ] **Step 3: Implement migration and query behavior**
+- [x] **Step 3: Implement migration and query behavior**
 
 Add nullable column, backfill through `canonicalize_platform`, canonicalize labels, safely merge matching non-empty PriceCharting IDs, then index the key. Make upsert, search, platform listing, deletion, targeted scrape, library enrichment, and catalog-to-game apply key-aware.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `python -m unittest backend.tests.test_api_smoke.PriceCatalogMigrationTests backend.tests.test_api_smoke.PriceCatalogApiTests -v`
 
@@ -105,17 +105,17 @@ git commit -m "feat: normalize price catalog platforms"
 
 **Interfaces:** Catalog entries have `platform`, `platform_key`, and canonical filter options. Price-link requests retain the existing `catalog_id` payload.
 
-- [ ] **Step 1: Locate duplicate platform knowledge**
+- [x] **Step 1: Locate duplicate platform knowledge**
 
 Run: `rg "platformSlugs|PlayStation 5" frontend/src/views/PriceBrowser.vue`
 
 Expected: existing local mapping is found.
 
-- [ ] **Step 2: Render API-provided labels and keys**
+- [x] **Step 2: Render API-provided labels and keys**
 
 Replace the local platform-slug map with catalog API options. Keep current search, scrape, link, and display flows, but send/compare canonical keys where present. Unknown labels remain visible.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run: `npm run build && npx vue-tsc --noEmit`
 
