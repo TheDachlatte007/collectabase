@@ -40,11 +40,17 @@
 
     <!-- Mobile Top Header -->
     <header class="mobile-header">
-      <router-link to="/" class="logo">
-        <img src="/icons/android-chrome-192x192.png" alt="Collectabase Logo" class="logo-img" />
-        Collectabase
+      <router-link to="/" class="mobile-logo">
+        <img src="/icons/android-chrome-192x192.png" alt="Collectabase Logo" class="mobile-logo-img" />
+        <span class="mobile-logo-text">Collectabase</span>
       </router-link>
-      <router-link to="/add" class="btn btn-primary btn-compact">+ Add</router-link>
+      <router-link to="/add" class="btn btn-primary mobile-add-btn" title="Add Item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Add</span>
+      </router-link>
     </header>
 
     <main class="main-content">
@@ -53,38 +59,46 @@
 
     <!-- Mobile-only bottom navigation -->
     <nav class="mobile-nav" aria-label="Main navigation">
-      <router-link to="/" active-class="" exact-active-class="nav-active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
-        <span>Library</span>
+      <router-link to="/" class="nav-tab" active-class="" exact-active-class="nav-active">
+        <div class="nav-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        </div>
+        <span class="nav-label">Library</span>
       </router-link>
 
-      <router-link to="/stats" active-class="nav-active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <line x1="18" y1="20" x2="18" y2="10"/>
-          <line x1="12" y1="20" x2="12" y2="4"/>
-          <line x1="6" y1="20" x2="6" y2="14"/>
-        </svg>
-        <span>Stats</span>
+      <router-link to="/stats" class="nav-tab" active-class="nav-active">
+        <div class="nav-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="6" y2="14"/>
+          </svg>
+        </div>
+        <span class="nav-label">Stats</span>
       </router-link>
 
-      <router-link to="/prices" active-class="nav-active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-          <line x1="7" y1="7" x2="7.01" y2="7"/>
-        </svg>
-        <span>Prices</span>
+      <router-link to="/prices" class="nav-tab" active-class="nav-active">
+        <div class="nav-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+          </svg>
+        </div>
+        <span class="nav-label">Prices</span>
       </router-link>
 
-      <router-link to="/more" active-class="nav-active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="1.5"/>
-          <circle cx="19" cy="12" r="1.5"/>
-          <circle cx="5" cy="12" r="1.5"/>
-        </svg>
-        <span>More</span>
+      <router-link to="/more" class="nav-tab" active-class="nav-active">
+        <div class="nav-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="1.5"/>
+            <circle cx="19" cy="12" r="1.5"/>
+            <circle cx="5" cy="12" r="1.5"/>
+          </svg>
+        </div>
+        <span class="nav-label">More</span>
       </router-link>
     </nav>
   </div>
@@ -294,35 +308,63 @@ function toggleSidebar() {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: max(0.875rem, env(safe-area-inset-top)) 1.25rem 0.875rem;
-    background: var(--nav-bg);
+    padding: calc(0.65rem + env(safe-area-inset-top, 0px)) 1.25rem 0.65rem;
+    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    background: var(--sidebar-bg);
     border-bottom: 1px solid var(--glass-border);
     position: sticky;
     top: 0;
     z-index: 100;
-    backdrop-filter: var(--card-blur);
-    -webkit-backdrop-filter: var(--card-blur);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transform: translateZ(0);
   }
 
-  .mobile-header .logo {
+  .mobile-header .mobile-logo {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
     font-weight: 700;
-    font-family: var(--font-display);
-    font-size: 1.1rem;
+    font-family: var(--font-body);
+    font-size: 1.15rem;
     color: var(--text);
     text-decoration: none;
+    letter-spacing: -0.02em;
+    -webkit-font-smoothing: antialiased;
   }
 
-  .mobile-header .logo-img {
-    width: 24px;
-    height: 24px;
-    box-shadow: none;
+  .mobile-header .mobile-logo-img {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
+    flex-shrink: 0;
+  }
+
+  .mobile-header .mobile-logo-text {
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  .mobile-header .mobile-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    min-height: 36px;
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 30%, transparent);
+    -webkit-font-smoothing: antialiased;
   }
 
   .main-content {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-nav {
@@ -331,17 +373,19 @@ function toggleSidebar() {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 64px;
-    background: var(--nav-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    min-height: 64px;
+    background: color-mix(in srgb, var(--sidebar-bg) 95%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     border-top: 1px solid var(--glass-border);
     z-index: 100;
-    padding-bottom: max(0px, env(safe-area-inset-bottom));
-    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.2);
+    padding-top: 0.35rem;
+    padding-bottom: max(0.45rem, calc(env(safe-area-inset-bottom, 0px) + 0.25rem));
+    box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.45);
+    transform: translateZ(0);
   }
 
-  .mobile-nav a {
+  .mobile-nav .nav-tab {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -349,26 +393,61 @@ function toggleSidebar() {
     flex: 1;
     color: var(--text-muted);
     text-decoration: none;
-    font-size: 0.65rem;
-    font-weight: 500;
-    gap: 0.25rem;
-    transition: color 0.2s;
+    gap: 0.2rem;
+    padding: 0.25rem 0;
+    transition: color 0.2s ease, transform 0.15s ease;
     -webkit-tap-highlight-color: transparent;
+    user-select: none;
   }
 
-  .mobile-nav a svg {
-    width: 24px;
-    height: 24px;
-    stroke-width: 2.2;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  .mobile-nav .nav-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 30px;
+    border-radius: 9999px;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .mobile-nav a.nav-active {
+  .mobile-nav .nav-tab svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), stroke-width 0.2s ease;
+  }
+
+  .mobile-nav .nav-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+    transition: color 0.2s ease, font-weight 0.2s ease;
+  }
+
+  /* Active State: glowing pill background around icon, crisp white/primary text */
+  .mobile-nav .nav-tab.nav-active {
     color: var(--primary);
   }
 
-  .mobile-nav a.nav-active svg {
-    transform: scale(1.15);
+  .mobile-nav .nav-tab.nav-active .nav-icon-wrap {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+    color: var(--primary);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 28%, transparent);
+  }
+
+  .mobile-nav .nav-tab.nav-active svg {
+    stroke-width: 2.3;
+    transform: scale(1.08);
+  }
+
+  .mobile-nav .nav-tab.nav-active .nav-label {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .mobile-nav .nav-tab:active {
+    transform: scale(0.93);
   }
 }
 </style>
