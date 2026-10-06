@@ -33,6 +33,8 @@ export interface Game {
   current_value?: number | null
   last_price_at?: string | null
   notes?: string | null
+  alt_titles?: string | string[] | null
+  alt_titles_list?: string[]
   is_wishlist: number | boolean
   wishlist_max_price?: number | null
   created_at?: string | null

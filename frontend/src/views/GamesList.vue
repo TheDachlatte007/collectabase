@@ -95,9 +95,13 @@ const sortBy = ref('name_asc')
 const brokenCoverIds = ref({})
 
 const filteredGames = computed(() => {
+  const q = search.value.trim().toLowerCase()
   const filtered = games.value.filter(g => {
-    const haystack = `${g.title || ''} ${g.platform_name || ''} ${g.location || ''}`.toLowerCase()
-    const matchesSearch = haystack.includes(search.value.toLowerCase())
+    const altText = Array.isArray(g.alt_titles_list)
+      ? g.alt_titles_list.join(' ')
+      : (typeof g.alt_titles === 'string' ? g.alt_titles : '')
+    const haystack = `${g.title || ''} ${altText} ${g.platform_name || ''} ${g.location || ''}`.toLowerCase()
+    const matchesSearch = !q || haystack.includes(q)
     const matchesPlatform = !selectedPlatform.value || String(g.platform_id) === String(selectedPlatform.value)
     const matchesType = !selectedType.value || g.item_type === selectedType.value
     return matchesSearch && matchesPlatform && matchesType

@@ -1,3 +1,5 @@
+import json
+import re
 import sqlite3
 from typing import Optional
 
@@ -9,6 +11,56 @@ from ...database import dict_from_row, get_db
 from ...services.lookup_service import cache_remote_cover
 
 router = APIRouter()
+
+
+def _normalize_alt_titles(val) -> Optional[str]:
+    if not val:
+        return None
+    if isinstance(val, list):
+        items = [str(x).strip() for x in val if str(x).strip()]
+        return json.dumps(items, ensure_ascii=False) if items else None
+    if isinstance(val, str):
+        val = val.strip()
+        if not val:
+            return None
+        if val.startswith("[") and val.endswith("]"):
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    items = [str(x).strip() for x in parsed if str(x).strip()]
+                    return json.dumps(items, ensure_ascii=False) if items else None
+            except Exception:
+                pass
+        parts = [p.strip() for p in re.split(r"[,;\n]+", val) if p.strip()]
+        return json.dumps(parts, ensure_ascii=False) if parts else None
+    return None
+
+
+def _parse_alt_titles(val) -> list[str]:
+    if not val:
+        return []
+    if isinstance(val, list):
+        return [str(x).strip() for x in val if str(x).strip()]
+    if isinstance(val, str):
+        val = val.strip()
+        if not val:
+            return []
+        if val.startswith("[") and val.endswith("]"):
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    return [str(x).strip() for x in parsed if str(x).strip()]
+            except Exception:
+                pass
+        return [p.strip() for p in re.split(r"[,;\n]+", val) if p.strip()]
+    return []
+
+
+def _enhance_game_row(row_dict: dict) -> dict:
+    if not row_dict:
+        return row_dict
+    row_dict["alt_titles_list"] = _parse_alt_titles(row_dict.get("alt_titles"))
+    return row_dict
 
 
 @router.get("/api/games")
@@ -34,15 +86,15 @@ async def list_games(
             query += " AND g.is_wishlist = ?"
             params.append(1 if wishlist else 0)
         if search:
-            query += " AND (g.title LIKE ? OR g.publisher LIKE ? OR g.developer LIKE ? OR COALESCE(p.name, '') LIKE ? OR COALESCE(g.item_type, '') LIKE ? OR COALESCE(g.barcode, '') LIKE ? OR COALESCE(g.location, '') LIKE ?)"
+            query += " AND (g.title LIKE ? OR g.publisher LIKE ? OR g.developer LIKE ? OR COALESCE(p.name, '') LIKE ? OR COALESCE(g.item_type, '') LIKE ? OR COALESCE(g.barcode, '') LIKE ? OR COALESCE(g.location, '') LIKE ? OR COALESCE(g.alt_titles, '') LIKE ?)"
             search_param = f"%{search}%"
-            params.extend([search_param, search_param, search_param, search_param, search_param, search_param, search_param])
+            params.extend([search_param, search_param, search_param, search_param, search_param, search_param, search_param, search_param])
 
         query += " ORDER BY g.updated_at DESC"
         if search:
             query += " LIMIT 20"
         cursor = db.execute(query, tuple(params))
-        return [dict_from_row(row) for row in cursor.fetchall()]
+        return [_enhance_game_row(dict_from_row(row)) for row in cursor.fetchall()]
 
 
 @router.post("/api/games")
@@ -58,21 +110,23 @@ async def create_game(game: GameCreate, force: bool = False):
 
     # Cache remote cover image locally before saving
     cover_url = await cache_remote_cover(game.cover_url)
+    alt_titles_serialized = _normalize_alt_titles(game.alt_titles)
 
     with get_db() as db:
         cursor = db.execute(
             '''
             INSERT INTO games (
-                title, platform_id, item_type, quantity, barcode, igdb_id, comicvine_id, hobbydb_id, mfc_id, release_date,
+                title, alt_titles, platform_id, item_type, quantity, barcode, igdb_id, comicvine_id, hobbydb_id, mfc_id, release_date,
                 publisher, developer, genre, description, cover_url,
                 region, condition, completeness, location,
                 purchase_date, purchase_price, current_value, notes,
                 is_wishlist, wishlist_max_price,
                 character_name, series_name, scale, funko_number, vinyl_format
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 game.title,
+                alt_titles_serialized,
                 game.platform_id,
                 game.item_type,
                 game.quantity,
@@ -123,7 +177,7 @@ async def get_game(game_id: int):
         game = dict_from_row(cursor.fetchone())
         if not game:
             raise not_found("Game not found")
-        return game
+        return _enhance_game_row(game)
 
 
 @router.put("/api/games/{game_id}")
@@ -140,8 +194,13 @@ async def update_game(game_id: int, game: GameUpdate):
         if new_cover and new_cover != existing_data.get("cover_url"):
             new_cover = await cache_remote_cover(new_cover)
 
+        alt_titles_val = existing_data.get("alt_titles")
+        if game.alt_titles is not None:
+            alt_titles_val = _normalize_alt_titles(game.alt_titles)
+
         merged = {
             "title": game.title or existing_data["title"],
+            "alt_titles": alt_titles_val,
             "platform_id": game.platform_id if game.platform_id is not None else existing_data["platform_id"],
             "item_type": game.item_type or existing_data["item_type"],
             "quantity": game.quantity if game.quantity is not None else existing_data["quantity"],
@@ -182,7 +241,7 @@ async def update_game(game_id: int, game: GameUpdate):
         db.execute(
             """
             UPDATE games SET
-                title = ?, platform_id = ?, item_type = ?, quantity = ?, barcode = ?, igdb_id = ?, comicvine_id = ?, hobbydb_id = ?, mfc_id = ?, release_date = ?,
+                title = ?, alt_titles = ?, platform_id = ?, item_type = ?, quantity = ?, barcode = ?, igdb_id = ?, comicvine_id = ?, hobbydb_id = ?, mfc_id = ?, release_date = ?,
                 publisher = ?, developer = ?, genre = ?, description = ?, cover_url = ?,
                 region = ?, condition = ?, completeness = ?, location = ?,
                 purchase_date = ?, purchase_price = ?, current_value = ?, notes = ?,
@@ -193,6 +252,7 @@ async def update_game(game_id: int, game: GameUpdate):
             """,
             (
                 merged["title"],
+                merged["alt_titles"],
                 merged["platform_id"],
                 merged["item_type"],
                 merged["quantity"],

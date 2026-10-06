@@ -56,6 +56,12 @@
             <label>Title *</label>
             <input v-model="game.title" required />
           </div>
+
+          <div class="form-group">
+            <label>Alternative Titles / Aliases</label>
+            <input v-model="altTitlesInput" placeholder="e.g. Mega Madness, Maximum Gaudium" />
+            <small class="text-muted">Separate multiple titles with commas</small>
+          </div>
           
           <div class="form-group">
             <label>Platform {{ game.item_type === 'game' ? '*' : '' }}</label>
@@ -331,6 +337,7 @@ const searchErrors = ref({ igdb: null, rawg: null, gametdb: null, comicvine: nul
 const sourceFilter = ref('all')
 const isEditMode = ref(false)
 const editId = ref(null)
+const altTitlesInput = ref('')
 const coverFileInput = ref(null)
 const coverUploading = ref(false)
 const coverUploadError = ref('')
@@ -410,6 +417,7 @@ const rankedResults = computed(() => {
 
 const game = ref({
   title: '',
+  alt_titles: null,
   platform_id: '',
   item_type: 'game',
   quantity: 1,
@@ -463,6 +471,7 @@ async function loadGame(id) {
       const data = res.data
       game.value = {
         title: data.title || '',
+        alt_titles: data.alt_titles || null,
         platform_id: data.platform_id || '',
         item_type: data.item_type || 'game',
         quantity: data.quantity ?? 1,
@@ -492,6 +501,18 @@ async function loadGame(id) {
         scale: data.scale || null,
         funko_number: data.funko_number || null,
         vinyl_format: data.vinyl_format || null
+      }
+      if (Array.isArray(data.alt_titles_list) && data.alt_titles_list.length > 0) {
+        altTitlesInput.value = data.alt_titles_list.join(', ')
+      } else if (typeof data.alt_titles === 'string') {
+        try {
+          const parsed = JSON.parse(data.alt_titles)
+          altTitlesInput.value = Array.isArray(parsed) ? parsed.join(', ') : data.alt_titles
+        } catch {
+          altTitlesInput.value = data.alt_titles || ''
+        }
+      } else {
+        altTitlesInput.value = ''
       }
     }
   } catch (e) {
@@ -724,6 +745,14 @@ function fillFromIgdb(result) {
   game.value.title = result.title
   game.value.cover_url = incomingCover
 
+  if (Array.isArray(result.alternative_names) && result.alternative_names.length > 0) {
+    const existing = altTitlesInput.value
+      ? altTitlesInput.value.split(',').map(s => s.trim()).filter(Boolean)
+      : []
+    const combined = Array.from(new Set([...existing, ...result.alternative_names]))
+    altTitlesInput.value = combined.join(', ')
+  }
+
   if (result.source === 'igdb') {
     game.value.igdb_id = result.igdb_id
     game.value.genre = result.genre
@@ -847,6 +876,10 @@ async function saveGame() {
   duplicateWarning.value = null
   try {
     const payload = { ...game.value }
+    const trimmedAltTitles = altTitlesInput.value
+      ? altTitlesInput.value.split(',').map(s => s.trim()).filter(Boolean)
+      : []
+    payload.alt_titles = trimmedAltTitles.length > 0 ? trimmedAltTitles : null
     if (!payload.platform_id) {
       payload.platform_id = null
     } else {

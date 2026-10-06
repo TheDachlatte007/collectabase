@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional, Union
 
 from pydantic import BaseModel
 
@@ -16,6 +16,7 @@ class BarcodeLookup(BaseModel):
 
 class GameCreate(BaseModel):
     title: str
+    alt_titles: Optional[Union[str, List[str]]] = None
     platform_id: Optional[int] = None
     item_type: Optional[str] = "game"
     quantity: Optional[int] = 1

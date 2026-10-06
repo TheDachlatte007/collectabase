@@ -400,7 +400,7 @@ async def lookup_igdb_title(title: str):
             query = (
                 f'search "{title}"; fields '
                 "name,first_release_date,genres.name,platforms.name,cover.url,summary,"
-                "involved_companies.company.name; limit 8;"
+                "involved_companies.company.name,alternative_names.name; limit 8;"
             )
             games_response = await client.post(
                 "https://api.igdb.com/v4/games", headers=headers, content=query
@@ -420,11 +420,17 @@ async def lookup_igdb_title(title: str):
                     (c["company"]["name"] for c in companies if c.get("publisher") and c.get("company")),
                     None,
                 )
+                alt_names = [
+                    a.get("name")
+                    for a in game.get("alternative_names", [])
+                    if isinstance(a, dict) and a.get("name")
+                ]
                 results.append(
                     {
                         "source": "igdb",
                         "igdb_id": game.get("id"),
                         "title": game.get("name"),
+                        "alternative_names": alt_names,
                         "release_date": _to_iso_date(game.get("first_release_date")),
                         "genre": ", ".join([g.get("name", "") for g in game.get("genres", [])]),
                         "platforms": [p.get("name", "") for p in game.get("platforms", [])],

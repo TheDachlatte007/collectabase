@@ -94,6 +94,10 @@
           <div class="detail-title-block">
             <h1>{{ game.title }}</h1>
             <p class="text-muted">{{ game.platform_name }}</p>
+            <p v-if="game.alt_titles_list && game.alt_titles_list.length" class="detail-alt-titles text-muted">
+              <span class="alt-badge">aka</span>
+              <span class="alt-names">{{ game.alt_titles_list.join(' · ') }}</span>
+            </p>
           </div>
           <div class="actions actions-compact actions-toolbar">
             <router-link :to="`/edit/${game.id}`" class="btn btn-primary btn-compact">Edit</router-link>
@@ -139,6 +143,10 @@
           <div class="chunk-card">
             <h3 class="chunk-title">Metadata</h3>
             <div class="details-grid">
+              <div v-if="game.alt_titles_list && game.alt_titles_list.length" class="detail-item detail-item-full">
+                <label>Alternative Titles</label>
+                <span>{{ game.alt_titles_list.join(', ') }}</span>
+              </div>
               <div v-if="game.item_type" class="detail-item">
                 <label>Type</label>
                 <span>{{ game.item_type.charAt(0).toUpperCase() + game.item_type.slice(1) }}</span>
@@ -247,6 +255,9 @@
           <div class="price-section-header flex flex-between items-center mb-2">
             <h3 class="chunk-title m-0">Market Prices</h3>
             <div class="actions-compact">
+              <button @click="openPriceBrowserSearch" class="btn btn-secondary btn-sm" title="Search catalog & link price">
+                🔎 Price Browser
+              </button>
               <button @click="checkPrice" class="btn btn-secondary btn-sm" :disabled="priceLoading">
                 {{ priceLoading ? '⏳' : '📊 PriceCharting' }}
               </button>
@@ -470,6 +481,7 @@ function closeDetailMoreMenu() {
     detailMoreMenu.value.open = false
   }
 }
+
 const galleryUploading = ref(false)
 const coverUploadError = ref('')
 const placeholderApplying = ref(false)
@@ -1297,6 +1309,34 @@ onMounted(async () => {
     gap: 1rem;
     align-items: stretch;
   }
+}
+
+.detail-alt-titles {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.alt-badge {
+  background: var(--surface-2, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.alt-names {
+  color: var(--text-muted, #94a3b8);
+}
+
+.detail-item-full {
+  grid-column: 1 / -1;
 }
 
 .cover-card {

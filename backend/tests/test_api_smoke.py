@@ -251,6 +251,46 @@ class ApiSmokeTest(unittest.TestCase):
         self.client.delete(f"/api/games/{gid}")
         self.client.delete(f"/api/games/{wid}")
 
+    def test_game_alt_titles_and_search(self):
+        platforms = self.client.get("/api/platforms").json()
+        platform_id = platforms[0]["id"]
+
+        create_res = self.client.post("/api/games", json={
+            "title": "Asterix: Maximum Gaudium",
+            "alt_titles": ["Asterix Mega Madness", "Asterix & Obelix"],
+            "platform_id": platform_id,
+        })
+        self.assertEqual(create_res.status_code, 200)
+        game_id = create_res.json()["id"]
+
+        # 1. Fetch game and verify parsed list
+        get_res = self.client.get(f"/api/games/{game_id}")
+        self.assertEqual(get_res.status_code, 200)
+        data = get_res.json()
+        self.assertIn("alt_titles_list", data)
+        self.assertIn("Asterix Mega Madness", data["alt_titles_list"])
+
+        # 2. Search by primary title
+        search_pri = self.client.get("/api/games?search=Maximum Gaudium")
+        self.assertEqual(search_pri.status_code, 200)
+        self.assertTrue(any(g["id"] == game_id for g in search_pri.json()))
+
+        # 3. Search by alternative title
+        search_alt = self.client.get("/api/games?search=Mega Madness")
+        self.assertEqual(search_alt.status_code, 200)
+        self.assertTrue(any(g["id"] == game_id for g in search_alt.json()))
+
+        # 4. Update alt_titles
+        update_res = self.client.put(f"/api/games/{game_id}", json={
+            "alt_titles": ["Asterix: Mega Madness US", "Maximum Gaudium DE"],
+        })
+        self.assertEqual(update_res.status_code, 200)
+        updated_data = self.client.get(f"/api/games/{game_id}").json()
+        self.assertIn("Asterix: Mega Madness US", updated_data["alt_titles_list"])
+
+        # Cleanup
+        self.client.delete(f"/api/games/{game_id}")
+
     def test_price_catalog_platforms_endpoint(self):
         r = self.client.get("/api/price-catalog/platforms")
         self.assertEqual(r.status_code, 200)

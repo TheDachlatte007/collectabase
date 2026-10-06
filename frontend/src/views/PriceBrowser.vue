@@ -57,8 +57,64 @@
 	        </button>
 	      </div>
 	    </div>
-    <div v-if="linkedGameId" class="link-notice mb-3">
-      Linked mode: selecting a row will write its prices to game #{{ linkedGameId }}.
+    <!-- Linked game banner with details, current price history, and alternative title chips -->
+    <div v-if="linkedGameId" class="linked-card mb-3">
+      <div class="linked-header">
+        <div class="linked-main-info">
+          <span class="linked-badge">🔗 Linked Item</span>
+          <h2 class="linked-title">{{ linkedGame?.title || `Game #${linkedGameId}` }}</h2>
+          <span v-if="linkedGame?.platform_name" class="linked-platform-badge">{{ linkedGame.platform_name }}</span>
+        </div>
+        <router-link v-if="returnToUrl" :to="returnToUrl" class="btn btn-secondary btn-sm linked-back-btn">
+          ← Back to Item
+        </router-link>
+      </div>
+
+      <div class="linked-body">
+        <div class="linked-stats">
+          <div class="linked-stat">
+            <span class="stat-label">Tracked Value:</span>
+            <span class="stat-value">
+              {{ linkedGame?.current_value != null ? `€${Number(linkedGame.current_value).toFixed(2)}` : 'Not set' }}
+            </span>
+          </div>
+          <div class="linked-stat">
+            <span class="stat-label">Condition:</span>
+            <span class="stat-value">{{ linkedGame?.condition || '—' }}</span>
+          </div>
+          <div class="linked-stat">
+            <span class="stat-label">Completeness:</span>
+            <span class="stat-value">{{ linkedGame?.completeness || '—' }}</span>
+          </div>
+          <div v-if="latestLinkedPrice" class="linked-stat linked-stat-price">
+            <span class="stat-label">Last Recorded:</span>
+            <span class="stat-value">
+              L: {{ latestLinkedPrice.loose_price != null ? `€${latestLinkedPrice.loose_price.toFixed(2)}` : '—' }} ·
+              CIB: {{ latestLinkedPrice.complete_price != null ? `€${latestLinkedPrice.complete_price.toFixed(2)}` : '—' }} ·
+              New: {{ latestLinkedPrice.new_price != null ? `€${latestLinkedPrice.new_price.toFixed(2)}` : '—' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Alternative Titles / Quick search chips -->
+        <div v-if="allSearchTitles.length > 1" class="linked-chips-container mt-2">
+          <span class="chips-label">Search title variants:</span>
+          <div class="chips-list">
+            <button
+              v-for="t in allSearchTitles"
+              :key="t"
+              type="button"
+              class="chip-btn"
+              :class="{ 'chip-active': isSearchActive(t) }"
+              @click="selectSearchTitle(t)"
+            >
+              {{ t }}
+              <span v-if="t === linkedGame?.title" class="chip-tag">Primary</span>
+              <span v-else class="chip-tag">Alias</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Scrape progress message -->
@@ -99,9 +155,56 @@
       <p>Use "Scrape Prices" to fetch the PriceCharting catalog for one or all platforms.</p>
     </div>
 
-    <div v-else-if="items.length === 0" class="empty">
-      <h3>No results found</h3>
-      <p>Try a different search or platform filter.</p>
+    <div v-else-if="items.length === 0" class="empty empty-interactive">
+      <div class="empty-icon">🔎</div>
+      <h3>No results in local price catalog</h3>
+      <p class="text-muted">
+        <template v-if="search">
+          No matches found for "<strong>{{ search }}</strong>"
+          <template v-if="selectedPlatformLabel"> on {{ selectedPlatformLabel }}</template>.
+        </template>
+        <template v-else>
+          No catalog entries match your active filters.
+        </template>
+      </p>
+
+      <!-- Suggested Alt Titles if any exist that differ from current search -->
+      <div v-if="suggestedAltTitles.length > 0" class="empty-suggestions mt-2">
+        <p class="text-sm text-muted">Try an alternative title from this item:</p>
+        <div class="chips-list mt-1">
+          <button
+            v-for="alt in suggestedAltTitles"
+            :key="alt"
+            type="button"
+            class="chip-btn"
+            @click="selectSearchTitle(alt)"
+          >
+            🔍 {{ alt }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Scrape Call-to-Action -->
+      <div class="empty-actions mt-3">
+        <button
+          v-if="search.trim()"
+          type="button"
+          class="btn btn-primary"
+          :disabled="scraping"
+          @click="startScrape"
+        >
+          <span v-if="scraping">Scraping…</span>
+          <span v-else>🔍 Scrape Online Prices for "{{ search.trim() }}"</span>
+        </button>
+        <button
+          v-if="selectedPlatform"
+          type="button"
+          class="btn btn-secondary"
+          @click="clearPlatformFilter"
+        >
+          Clear Platform Filter
+        </button>
+      </div>
     </div>
 
     <template v-else>
@@ -254,9 +357,80 @@ const scrapeResult = ref(null)
 const lastScraped = ref('')
 const linkedGameId = ref(null)
 const applyLoadingId = ref(null)
+const linkedGame = ref(null)
+const linkedGameHistory = ref([])
+const linkedGameLoading = ref(false)
 const libraryMarkers = ref(new Set()) // Combined "Title|Platform" keys
 const route = useRoute()
 const router = useRouter()
+
+const returnToUrl = computed(() => {
+  return typeof route.query.returnTo === 'string' && route.query.returnTo.trim()
+    ? route.query.returnTo.trim()
+    : (linkedGameId.value ? `/game/${linkedGameId.value}` : null)
+})
+
+const latestLinkedPrice = computed(() => {
+  return linkedGameHistory.value?.[0] || null
+})
+
+const allSearchTitles = computed(() => {
+  if (!linkedGame.value) return []
+  const list = []
+  if (linkedGame.value.title) list.push(linkedGame.value.title.trim())
+  if (Array.isArray(linkedGame.value.alt_titles_list)) {
+    linkedGame.value.alt_titles_list.forEach(t => {
+      const clean = String(t || '').trim()
+      if (clean && !list.includes(clean)) list.push(clean)
+    })
+  } else if (typeof linkedGame.value.alt_titles === 'string') {
+    try {
+      const parsed = JSON.parse(linkedGame.value.alt_titles)
+      if (Array.isArray(parsed)) {
+        parsed.forEach(t => {
+          const clean = String(t || '').trim()
+          if (clean && !list.includes(clean)) list.push(clean)
+        })
+      }
+    } catch {
+      linkedGame.value.alt_titles.split(',').forEach(t => {
+        const clean = t.trim()
+        if (clean && !list.includes(clean)) list.push(clean)
+      })
+    }
+  }
+  return list
+})
+
+const suggestedAltTitles = computed(() => {
+  const current = search.value.trim().toLowerCase()
+  return allSearchTitles.value.filter(t => t.toLowerCase() !== current)
+})
+
+function isSearchActive(title) {
+  return search.value.trim().toLowerCase() === String(title || '').trim().toLowerCase()
+}
+
+function selectSearchTitle(title) {
+  search.value = title
+  loadPage(1)
+}
+
+async function loadLinkedGameDetails(id) {
+  linkedGameLoading.value = true
+  try {
+    const [gameRes, histRes] = await Promise.all([
+      gamesApi.get(id),
+      priceApi.history(id)
+    ])
+    if (gameRes.ok) linkedGame.value = gameRes.data
+    if (histRes.ok && Array.isArray(histRes.data)) linkedGameHistory.value = histRes.data
+  } catch (e) {
+    console.warn('Failed to load linked game details:', e)
+  } finally {
+    linkedGameLoading.value = false
+  }
+}
 
 let searchTimer = null
 
@@ -455,9 +629,9 @@ async function applyToLinkedGame(item) {
       return
     }
     notifySuccess(`Price from "${item.title}" applied to game #${gameId}.`)
-    const returnTo = typeof route.query.returnTo === 'string' ? route.query.returnTo.trim() : ''
+    const returnTo = returnToUrl.value
     if (returnTo) {
-      await router.push(returnTo)
+      setTimeout(() => router.push(returnTo), 600)
     }
   } catch (e) {
     console.error('Apply catalog price failed:', e)
@@ -549,6 +723,7 @@ onMounted(async () => {
   if (routeSearch) search.value = routeSearch
   if (routeLinkGame && Number.isFinite(Number(routeLinkGame))) {
     linkedGameId.value = Number(routeLinkGame)
+    loadLinkedGameDetails(linkedGameId.value)
   }
 
   await loadPlatforms()
@@ -681,6 +856,159 @@ onMounted(async () => {
   padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
   color: #bfdbfe;
+}
+
+/* ── Linked Game Banner ── */
+.linked-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.linked-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.linked-main-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.linked-badge {
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.linked-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.linked-platform-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.linked-back-btn {
+  font-size: 0.82rem;
+}
+
+.linked-stats {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.linked-stat {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.stat-label {
+  color: var(--text-muted, #94a3b8);
+}
+
+.stat-value {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.linked-stat-price .stat-value {
+  color: #38bdf8;
+}
+
+.linked-chips-container {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.chips-label {
+  font-size: 0.78rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.chips-list {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.chip-btn.chip-active {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: #3b82f6;
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.chip-tag {
+  font-size: 0.68rem;
+  opacity: 0.7;
+}
+
+.empty-interactive {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.empty-icon {
+  font-size: 2.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 /* ── Table ── */

@@ -20,6 +20,7 @@ class Game(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String, nullable=False)
+    alt_titles = Column(Text)
     platform_id = Column(Integer, ForeignKey("platforms.id"))
     barcode = Column(String)
     igdb_id = Column(Integer)
