@@ -28,10 +28,13 @@ class TestDeploymentConfig(unittest.TestCase):
     def test_runtime_uses_ci_node_version_and_lifespan(self):
         root = Path(__file__).resolve().parents[2]
         dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+        entrypoint = (root / "entrypoint.sh").read_text(encoding="utf-8")
         main = (root / "backend" / "main.py").read_text(encoding="utf-8")
 
         self.assertIn("FROM node:20-alpine", dockerfile)
         self.assertIn("RUN npm ci", dockerfile)
+        self.assertIn("mkdir -p /app/data /app/uploads /app/backups", dockerfile)
+        self.assertIn("mkdir -p /app/data /app/uploads /app/backups", entrypoint)
         self.assertIn("lifespan=lifespan", main)
         self.assertNotIn("@app.on_event", main)
 

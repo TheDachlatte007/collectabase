@@ -7,8 +7,10 @@ __pycache__/
 stack.env
 data/
 uploads/
+backups/
 frontend/dist/
 .git/
+.gitnexus/
 .github/
 .claude/
 .planning/

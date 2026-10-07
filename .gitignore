@@ -32,6 +32,7 @@ yarn-error.log*
 # Database & Uploads
 data/
 uploads/
+backups/
 *.db
 *.sqlite
 *.sqlite3

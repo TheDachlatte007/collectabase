@@ -33,8 +33,8 @@ RUN chmod +x ./entrypoint.sh
 # Copy the built frontend from Stage 1 into the expected location
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Create directories for data and uploads
-RUN mkdir -p /app/data /app/uploads
+# Create directories for data, uploads, and backups
+RUN mkdir -p /app/data /app/uploads /app/backups
 
 # Expose the API port
 EXPOSE 8000

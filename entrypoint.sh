@@ -3,8 +3,8 @@ set -e
 
 echo "=== Collectabase startup ==="
 
-# Ensure data directory exists
-mkdir -p /app/data /app/uploads
+# Ensure data directories exist
+mkdir -p /app/data /app/uploads /app/backups
 
 # Run Alembic migrations – creates all tables on first run, applies future migrations safely
 echo "Running database migrations..."
