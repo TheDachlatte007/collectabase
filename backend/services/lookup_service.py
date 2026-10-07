@@ -186,7 +186,7 @@ def _local_console_image(slug: str, context_text: str = "") -> Optional[str]:
     allowed_ext = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"}
 
     # 1) Exact file wins.
-    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+    for ext in (".webp", ".png", ".jpg", ".jpeg"):
         for path in files:
             if path.suffix.lower() == ext and path.stem.lower() == slug:
                 return _console_fallback_url(path)

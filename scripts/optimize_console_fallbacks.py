@@ -11,7 +11,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageFile, ImageOps, UnidentifiedImageError
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}

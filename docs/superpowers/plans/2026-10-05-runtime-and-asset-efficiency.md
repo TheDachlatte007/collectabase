@@ -35,21 +35,21 @@
 
 **Interfaces:** Docker builder uses `node:20-alpine` and `npm ci`. FastAPI has an `@asynccontextmanager` lifespan that calls `init_db`, `init_scheduler`, and `shutdown_scheduler`.
 
-- [ ] **Step 1: Write lifecycle and Dockerfile checks**
+- [x] **Step 1: Write lifecycle and Dockerfile checks**
 
 Assert startup initializes database/scheduler once, shutdown delegates to scheduler shutdown, and Dockerfile specifies Node 20 plus `npm ci`.
 
-- [ ] **Step 2: Run focused checks to verify failure**
+- [x] **Step 2: Run focused checks to verify failure**
 
 Run: `python -m unittest backend.tests.test_api_smoke.RuntimeConfigTests -v`
 
 Expected: FAIL because deprecated event decorators and Node 18/npm install remain.
 
-- [ ] **Step 3: Implement lifespan and aligned build**
+- [x] **Step 3: Implement lifespan and aligned build**
 
 Use lifespan without changing router/static/SPA order. Change only frontend Docker stage to Node 20 and `npm ci`.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `python -m unittest backend.tests.test_api_smoke.RuntimeConfigTests -v && docker build -t collectabase:runtime-check .`
 
@@ -70,21 +70,21 @@ git commit -m "chore: align runtime build and application lifecycle"
 
 **Interfaces:** `python scripts/optimize_console_fallbacks.py --source <dir> --output <dir> --check` outputs WebP with max long edge 1200px, preserves aspect ratio, and leaves sources untouched.
 
-- [ ] **Step 1: Write temporary-image optimizer tests**
+- [x] **Step 1: Write temporary-image optimizer tests**
 
 Generate a portrait image, run script, assert WebP output, longest edge <=1200, and unchanged source checksum. Add invalid-file case that exits nonzero without deletion.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `python -m unittest backend.tests.test_api_smoke.ConsoleAssetOptimizerTests -v`
 
 Expected: FAIL because script does not exist.
 
-- [ ] **Step 3: Implement non-destructive optimizer**
+- [x] **Step 3: Implement non-destructive optimizer**
 
 Use Pillow from `scripts/requirements.txt` only. Write explicit output directory via temporary output and atomic rename. Print per-file and total reduction. Ignore raw staging and generated temporary directories, not final served assets.
 
-- [ ] **Step 4: Process reviewed batch and verify**
+- [x] **Step 4: Process reviewed batch and verify**
 
 Run against a copied source set, inspect portrait/landscape samples, then migrate only verified runtime assets/references. Do not delete source assets before visual verification.
 
@@ -92,7 +92,7 @@ Run: `npm run build && python -m unittest backend.tests.test_api_smoke.ConsoleAs
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/optimize_console_fallbacks.py scripts/requirements.txt README.md .gitignore backend/static/console-fallbacks
