@@ -449,6 +449,39 @@ class ApiSmokeTest(unittest.TestCase):
 
         self.client.delete(f"/api/games/{game_id}")
 
+    def test_fetch_market_price_uses_alt_title_catalog_match(self):
+        ps1 = self._platform_by_name("playstation")
+        payload = {
+            "title": "Biohazard Director's Cut",
+            "alt_titles": ["Resident Evil Director's Cut"],
+            "platform_id": ps1["id"],
+            "item_type": "game",
+            "is_wishlist": False,
+        }
+        created = self.client.post("/api/games", json=payload)
+        self.assertEqual(created.status_code, 200)
+        game_id = created.json()["id"]
+
+        self._insert_price_catalog(
+            title="Resident Evil Director's Cut",
+            platform=ps1["name"],
+            loose_eur=49.99,
+        )
+
+        with (
+            patch("backend.price_tracker._fetch_pricecharting_scrape", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_ebay_market_price", new=AsyncMock(return_value=None)),
+            patch("backend.price_tracker.fetch_rawg_reference", new=AsyncMock(return_value=None)),
+        ):
+            r = self.client.post(f"/api/games/{game_id}/fetch-market-price")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data.get("source"), "pricecharting")
+        self.assertAlmostEqual(float(data.get("market_price")), 49.99, places=2)
+        self.assertEqual(data.get("matched_title"), "Resident Evil Director's Cut")
+
+        self.client.delete(f"/api/games/{game_id}")
+
     def test_full_backup_round_trip_with_uploads_and_credentials(self):
         platform = self._platform_by_name("xbox one")
         payload = {

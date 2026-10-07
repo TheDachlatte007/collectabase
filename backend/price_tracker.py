@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
+from .api.routes.games import _parse_alt_titles
 from .api.security import require_admin_access
 from .database import dict_from_row, get_db, set_app_meta
 from . import jobs
@@ -83,6 +84,17 @@ async def fetch_market_price(game_id: int, source: Optional[str] = None):
         if not catalog:
             # Retry without platform constraint for mismatched/legacy platform labels.
             catalog = _lookup_local_catalog_price(game["title"], "")
+
+        if not catalog and game.get("alt_titles"):
+            for alt_title in _parse_alt_titles(game.get("alt_titles")):
+                if not alt_title or alt_title.strip().lower() == (game.get("title") or "").strip().lower():
+                    continue
+                catalog = _lookup_local_catalog_price(alt_title, game.get("platform_name") or "")
+                if not catalog:
+                    catalog = _lookup_local_catalog_price(alt_title, "")
+                if catalog:
+                    break
+
         if catalog:
             with get_db() as db:
                 db.execute(
@@ -113,6 +125,13 @@ async def fetch_market_price(game_id: int, source: Optional[str] = None):
 
         # Always try scraper first; token does not gate this path.
         pc = await _fetch_pricecharting_scrape(game["title"], game.get("platform_name") or "")
+        if not pc and game.get("alt_titles"):
+            for alt_title in _parse_alt_titles(game.get("alt_titles")):
+                if not alt_title or alt_title.strip().lower() == (game.get("title") or "").strip().lower():
+                    continue
+                pc = await _fetch_pricecharting_scrape(alt_title, game.get("platform_name") or "")
+                if pc:
+                    break
         if pc:
             loose_eur = _to_eur(pc["loose_usd"], eur_rate)
             cib_eur = _to_eur(pc["cib_usd"], eur_rate)

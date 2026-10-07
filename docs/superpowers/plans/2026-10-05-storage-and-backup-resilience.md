@@ -37,27 +37,27 @@
 
 **Interfaces:** Produces `COLLECTABASE_DATA_DIR`, `COLLECTABASE_UPLOADS_DIR`, and `COLLECTABASE_BACKUP_DIR`; container paths remain `/app/data`, `/app/uploads`, and `/app/backups`.
 
-- [ ] **Step 1: Write a failing Compose configuration regression check**
+- [x] **Step 1: Write a failing Compose configuration regression check**
 
 Add a test that loads `docker-compose.yml` and verifies each source variable and container target appears exactly once.
 
-- [ ] **Step 2: Run the focused check**
+- [x] **Step 2: Run the focused check**
 
 Run: `python -m unittest backend.tests.test_api_smoke.TestDeploymentConfig`
 
 Expected: FAIL because configurable source variables do not exist.
 
-- [ ] **Step 3: Implement explicit Compose mounts and example values**
+- [x] **Step 3: Implement explicit Compose mounts and example values**
 
 Use long-syntax bind mounts or quoted interpolation so paths containing spaces are one source value. Add local defaults and `COLLECTABASE_BACKUP_DIR=/app/backups`. Add `stack.env.example` with local defaults plus a commented TrueNAS local-ZFS example. Update README and warn against SMB-backed SQLite.
 
-- [ ] **Step 4: Run the focused check**
+- [x] **Step 4: Run the focused check**
 
 Run: `python -m unittest backend.tests.test_api_smoke.TestDeploymentConfig`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docker-compose.yml stack.env.example README.md backend/tests/test_api_smoke.py
@@ -75,25 +75,25 @@ git commit -m "feat: configure persistent storage paths"
 
 **Interfaces:** `create_backup()` manifests report `includes.price_catalog_cache: true`. `_backup_destination_dir() -> Path` resolves `COLLECTABASE_BACKUP_DIR` before legacy fallback.
 
-- [ ] **Step 1: Write failing catalog and destination tests**
+- [x] **Step 1: Write failing catalog and destination tests**
 
 Seed a catalog row and upload in the backup fixture. Assert archive and manifest retain the row, automatic backup writes under a patched `COLLECTABASE_BACKUP_DIR`, and a legacy `price_catalog_cache: false` manifest remains accepted.
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run: `python -m unittest backend.tests.test_api_smoke.Backup* -v`
 
 Expected: FAIL because sanitization deletes `price_catalog` and automatic backups use only the database parent.
 
-- [ ] **Step 3: Preserve catalog data and resolve independent destination**
+- [x] **Step 3: Preserve catalog data and resolve independent destination**
 
 Remove catalog deletion from snapshot sanitization, add catalog count, report catalog inclusion in staged restore, and resolve `COLLECTABASE_BACKUP_DIR` when set. Keep encryption, ZIP limits, staged confirmation, and legacy parsing unchanged.
 
-- [ ] **Step 4: Update backup UI and documentation**
+- [x] **Step 4: Update backup UI and documentation**
 
 Replace statements that catalog data is excluded. Keep precise wording on encrypted provider credentials and never exporting `ADMIN_API_KEY`.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `python -m unittest backend.tests.test_api_smoke -v`
 
