@@ -49,10 +49,21 @@ _ALIASES = {
     "ps4": "playstation 4",
     "ps3": "playstation 3",
     "ps2": "playstation 2",
+    "ps1": "playstation",
+    "psx": "playstation",
     "xbox series x": "xbox series x s",
+    "xbox series s": "xbox series x s",
     "super nintendo": "snes",
     "genesis": "sega genesis mega drive",
     "mega drive": "sega genesis mega drive",
+    "switch": "nintendo switch",
+    "gba": "game boy advance",
+    "gbc": "game boy color",
+    "n64": "nintendo 64",
+    "ngc": "gamecube",
+    "3ds": "nintendo 3ds",
+    "ds": "nintendo ds",
+    "vita": "ps vita",
 }
 PLATFORM_SLUGS = {identity.label.lower(): identity.scraper_slug for identity in _PLATFORMS.values() if identity.scraper_slug}
 
