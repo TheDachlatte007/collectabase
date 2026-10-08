@@ -38,7 +38,15 @@
             <label>Storage</label>
             <div class="kpi-value">{{ info.db_size || '—' }}</div>
             <div class="kpi-sub">Uploads: {{ info.uploads_size || '—' }}</div>
+            <div class="storage-status" :class="`storage-status-${info.storage_health || 'empty'}`">
+              {{ storageHealthLabel }}
+            </div>
           </div>
+        </div>
+
+        <div v-if="info.storage_health === 'attention'" class="storage-alert">
+          <strong>Storage needs attention</strong>
+          <span>{{ info.storage_health_message }}</span>
         </div>
 
         <div v-if="setupHints.length" class="setup-hints mt-2">
@@ -489,6 +497,14 @@ const coverCoverage = computed(() => Number(info.value.cover_coverage_pct || 0))
 const providersConfigured = computed(() => Number(info.value.providers_configured || 0))
 const providersTotal = computed(() => Number(info.value.providers_total || 4))
 const priceSchedulerEnabled = computed(() => Boolean(info.value.price_scheduler_enabled))
+const storageHealthLabel = computed(() => {
+  const labels = {
+    healthy: 'Storage healthy',
+    empty: 'New or empty collection',
+    attention: 'Check storage',
+  }
+  return labels[info.value.storage_health] || 'Checking storage'
+})
 const setupHints = computed(() => {
   const hints = []
   if (!info.value.igdb_configured) hints.push('Set IGDB credentials to improve metadata and cover lookup.')
@@ -950,6 +966,46 @@ onMounted(loadInfo)
 .kpi-sub {
   margin-top: 0.2rem;
   font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.storage-status {
+  display: inline-flex;
+  margin-top: 0.55rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.storage-status-healthy {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.storage-status-empty {
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.storage-status-attention {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.storage-alert {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.storage-alert span {
   color: var(--text-muted);
 }
 

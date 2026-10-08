@@ -83,6 +83,24 @@ def _safe_int(value, default: int) -> int:
         return default
 
 
+def _storage_health(total_items: int, wishlist_count: int, db_size_bytes: int, backup_count: int) -> dict[str, str]:
+    """Summarize persistence health without exposing server paths to the client."""
+    if db_size_bytes <= 0:
+        return {
+            "state": "attention",
+            "message": "The active database is unavailable or empty. Check persistent storage mappings before adding items.",
+        }
+    if total_items == 0 and wishlist_count == 0 and backup_count > 0:
+        label = "backup" if backup_count == 1 else "backups"
+        return {
+            "state": "attention",
+            "message": f"The active collection is empty while {backup_count} {label} are available. Check storage mappings or restore a backup before adding items.",
+        }
+    if total_items == 0 and wishlist_count == 0:
+        return {"state": "empty", "message": "New or empty collection"}
+    return {"state": "healthy", "message": "Collection storage looks healthy"}
+
+
 def _workflow_scheduler_status():
     repo_root = Path(__file__).resolve().parents[3]
     workflow_file = repo_root / ".github" / "workflows" / "daily-price-update.yml"
@@ -181,6 +199,12 @@ async def settings_info():
 
     backup_dir = _backup_destination_dir()
     auto_backup_files = list(backup_dir.glob("collectabase-auto-backup-*.zip")) if backup_dir.is_dir() else []
+    storage_health = _storage_health(
+        total_items=total_items,
+        wishlist_count=wishlist_count,
+        db_size_bytes=db_size_bytes,
+        backup_count=len(auto_backup_files),
+    )
 
     meta = get_app_meta_many(
         [
@@ -249,6 +273,8 @@ async def settings_info():
         "platforms_count": platforms_count,
         "db_size": db_size,
         "db_size_bytes": db_size_bytes,
+        "storage_health": storage_health["state"],
+        "storage_health_message": storage_health["message"],
         "uploads_files": uploads_files,
         "uploads_size": _human_size(uploads_size_bytes),
         "uploads_size_bytes": uploads_size_bytes,

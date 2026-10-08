@@ -58,6 +58,24 @@ class TestDatabaseConfiguration(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), configured_url)
 
 
+class StorageHealthTests(unittest.TestCase):
+    def test_empty_collection_with_available_backup_needs_attention(self):
+        from backend.api.routes.settings import _storage_health
+
+        health = _storage_health(total_items=0, wishlist_count=0, db_size_bytes=102400, backup_count=2)
+
+        self.assertEqual(health["state"], "attention")
+        self.assertIn("2 backups", health["message"])
+
+    def test_new_empty_collection_without_backup_is_neutral(self):
+        from backend.api.routes.settings import _storage_health
+
+        health = _storage_health(total_items=0, wishlist_count=0, db_size_bytes=102400, backup_count=0)
+
+        self.assertEqual(health["state"], "empty")
+        self.assertEqual(health["message"], "New or empty collection")
+
+
 class PlatformCatalogTests(unittest.TestCase):
     def test_known_aliases_and_unknown_platforms_have_stable_identities(self):
         from backend.services.price.platforms import canonicalize_platform, get_known_platforms
