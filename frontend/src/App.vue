@@ -249,6 +249,8 @@ function toggleSidebar() {
 }
 
 .nav-icon {
+  width: 1.5rem;
+  height: 1.5rem;
   font-size: 1.25rem;
   opacity: 0.8;
   flex-shrink: 0;
